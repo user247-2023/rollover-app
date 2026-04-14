@@ -956,6 +956,7 @@ function TipsTab({ plan, preset }) {
       try { data = JSON.parse(text); }
       catch(e) { throw new Error("Server returned an unexpected response. Check Vercel logs."); }
       if (data.error) throw new Error(data.error);
+      if (data.message) { setError(data.message); setLoading(false); return; }
       setTips(data.tips || []);
       setLastFetch(Date.now());
     } catch (e) {
