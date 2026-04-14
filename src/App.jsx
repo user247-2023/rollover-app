@@ -88,7 +88,7 @@ const PRESETS = [
   {id:"beta", label:"BETA", color:"#69FF47",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#69FF47,#00C853)",odds:1.20,wdPct:0.25,emoji:"β"},
   {id:"gamma",label:"GAMMA",color:"#E040FB",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#E040FB,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
 ];
-const TABS = ["TODAY","HISTORY","RESERVE","SETTINGS"];
+const TABS = ["TODAY","TIPS","HISTORY","RESERVE","SETTINGS"];
 
 // ── Animated counter ─────────────────────────────────────────────
 function useCountUp(target, duration=700) {
@@ -582,6 +582,7 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete}) {
       </div>
       <div style={{animation:"fadeUp 0.2s ease"}}>
         {tab==="TODAY"    && <TodayTab   plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
+        {tab==="TIPS"     && <TipsTab    plan={plan} preset={preset}/>}
         {tab==="HISTORY"  && <HistTab    plan={plan} st={st} preset={preset}/>}
         {tab==="RESERVE"  && <SRTab      plan={plan} st={st} preset={preset}/>}
         {tab==="SETTINGS" && <SetTab     plan={plan} preset={preset} onDelete={onDelete}/>}
@@ -915,6 +916,331 @@ function SetupScreen({presetId,onSetup,onBack}) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════ TIPS TAB ══════════════════════════════ */
+const MARKET_COLORS = {
+  "Over": "#69FF47", "Under": "#00E5FF", "BTTS": "#E040FB",
+  "Both": "#E040FB", "First": "#FFD600", "Asian": "#FF6D00",
+  "Total": "#FF6D00", "Either": "#E040FB"
+};
+function marketColor(market) {
+  const key = Object.keys(MARKET_COLORS).find(k => market?.startsWith(k));
+  return key ? MARKET_COLORS[key] : "#00E5FF";
+}
+
+function TipsTab({ plan, preset }) {
+  const [tips,     setTips]     = useState([]);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+  const [lastFetch,setLastFetch]= useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [filter,   setFilter]   = useState("ALL");
+
+  const today = new Date().toISOString().split("T")[0];
+  const PLANS_ODDS = { alpha:1.10, beta:1.20, gamma:1.50 };
+
+  const fetchTips = async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch("/api/tips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: today,
+          planOdds: Object.values(PLANS_ODDS),
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setTips(data.tips || []);
+      setLastFetch(Date.now());
+    } catch (e) {
+      setError(e.message || "Failed to load tips. Check your API key.");
+    }
+    setLoading(false);
+  };
+
+  const FILTERS = ["ALL","LOW RISK","MEDIUM RISK","HIGH RISK","OVER","UNDER","BTTS"];
+  const filtered = tips.filter(t => {
+    if(filter==="ALL") return true;
+    if(filter==="LOW RISK")    return t.risk==="LOW";
+    if(filter==="MEDIUM RISK") return t.risk==="MEDIUM";
+    if(filter==="HIGH RISK")   return t.risk==="HIGH";
+    if(filter==="OVER")  return t.pick?.toUpperCase().includes("OVER");
+    if(filter==="UNDER") return t.pick?.toUpperCase().includes("UNDER");
+    if(filter==="BTTS")  return t.market?.toUpperCase().includes("BTTS") || t.market?.includes("Both Teams");
+    return true;
+  });
+
+  const riskColor = r => r==="LOW"?"#69FF47":r==="MEDIUM"?"#FFD600":"#FF1744";
+
+  return (
+    <div>
+      {/* Header card */}
+      <div style={{...S.glassCard, background:`linear-gradient(135deg,${preset.color}0a,transparent)`,
+        border:`1px solid ${preset.color}33`, marginBottom:12, padding:"14px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,
+              color:preset.color,letterSpacing:2}}>AI GOALS TIPS</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",marginTop:3,lineHeight:1.5}}>
+              Claude AI + Live Web Search<br/>
+              Goals markets only · No straight wins
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginBottom:4}}>
+              {lastFetch ? `Updated ${Math.round((Date.now()-lastFetch)/60000)}m ago` : "Not loaded"}
+            </div>
+            <button onClick={fetchTips} disabled={loading}
+              style={{background:loading?"#ffffff0a":preset.gradient,
+                border:"none",borderRadius:8,padding:"8px 14px",cursor:loading?"not-allowed":"pointer",
+                fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:10,
+                color:loading?"#ffffff44":"#000",letterSpacing:1,
+                boxShadow:loading?"none":`0 0 20px ${preset.glow}`}}>
+              {loading ? "⏳ LOADING..." : "⚡ GET TIPS"}
+            </button>
+          </div>
+        </div>
+
+        {/* Warning */}
+        <div style={{marginTop:10,background:"#FFD60008",border:"1px solid #FFD60022",
+          borderRadius:8,padding:"7px 10px",fontFamily:"'DM Mono',monospace",fontSize:8,
+          color:"#FFD60088",lineHeight:1.6}}>
+          ⚠ AI tips are analytical suggestions only, not guarantees. Always combine with your own research. Bet responsibly.
+        </div>
+      </div>
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div>
+          {[1,2,3,4].map(i=>(
+            <div key={i} style={{...S.glassCard,marginBottom:10,padding:14,opacity:0.6}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{background:"#ffffff08",borderRadius:4,height:12,width:"60%",animation:"pulse-load 1.5s ease infinite"}}/>
+                <div style={{background:"#ffffff08",borderRadius:4,height:12,width:"15%",animation:"pulse-load 1.5s ease infinite"}}/>
+              </div>
+              <div style={{background:"#ffffff05",borderRadius:4,height:8,width:"40%",marginBottom:8,animation:"pulse-load 1.5s ease infinite"}}/>
+              <div style={{background:"#ffffff05",borderRadius:4,height:8,width:"80%",animation:"pulse-load 1.5s ease infinite"}}/>
+              <style>{`@keyframes pulse-load{0%,100%{opacity:.5}50%{opacity:1}}`}</style>
+            </div>
+          ))}
+          <div style={{textAlign:"center",fontFamily:"'DM Mono',monospace",fontSize:10,
+            color:"#ffffff33",padding:"8px 0",letterSpacing:2,animation:"blink 1s step-end infinite"}}>
+            SEARCHING LIVE MATCHES & ANALYSING STATS...
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && !loading && (
+        <div style={{...S.glassCard,border:"1px solid #FF174444",
+          background:"linear-gradient(135deg,#FF174408,transparent)",padding:14}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
+            color:"#FF1744",marginBottom:8}}>✕ FAILED TO LOAD</div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#FF174488",
+            lineHeight:1.6,marginBottom:12}}>{error}</div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",
+            lineHeight:1.7}}>
+            Make sure you have added your ANTHROPIC_API_KEY to Vercel:<br/>
+            Vercel Dashboard → Your Project → Settings → Environment Variables<br/>
+            Key: ANTHROPIC_API_KEY | Value: sk-ant-...
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && tips.length===0 && (
+        <div style={{textAlign:"center",padding:"50px 0"}}>
+          <div style={{fontSize:48,marginBottom:16}}>⚽</div>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:preset.color,
+            letterSpacing:3,marginBottom:8}}>NO TIPS LOADED</div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff33",
+            lineHeight:1.8,marginBottom:20}}>
+            Tap GET TIPS above to fetch<br/>today's AI-analysed goals markets
+          </div>
+        </div>
+      )}
+
+      {/* Filter pills */}
+      {tips.length>0 && !loading && (
+        <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:6,marginBottom:12,
+          scrollbarWidth:"none"}}>
+          {FILTERS.map(f=>(
+            <button key={f} onClick={()=>setFilter(f)}
+              style={{whiteSpace:"nowrap",padding:"5px 12px",borderRadius:20,border:"none",
+                cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:1,
+                background:filter===f?preset.gradient:"#ffffff08",
+                color:filter===f?"#000":"#ffffff55",
+                boxShadow:filter===f?`0 0 12px ${preset.glow}`:"none",
+                transition:"all .2s",flexShrink:0}}>
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Tips count */}
+      {tips.length>0 && !loading && (
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",
+          letterSpacing:2,marginBottom:10}}>
+          {filtered.length} TIP{filtered.length!==1?"S":""} · TODAY {today}
+        </div>
+      )}
+
+      {/* Tip cards */}
+      {!loading && filtered.map((tip, i) => {
+        const col  = marketColor(tip.market);
+        const rCol = riskColor(tip.risk);
+        const isExp= expanded===tip.id;
+        const conf = tip.confidence || 70;
+
+        return (
+          <button key={tip.id||i} onClick={()=>setExpanded(isExp?null:tip.id)}
+            style={{width:"100%",background:"none",border:"none",padding:0,
+              cursor:"pointer",marginBottom:10,textAlign:"left",
+              animation:`fadeUp ${0.2+i*0.05}s ease`}}>
+            <div style={{...S.glassCard,marginBottom:0,padding:"14px",
+              border:`1px solid ${col}22`,
+              background:`linear-gradient(135deg,${col}06,#0a0d14)`,
+              transition:"all .25s"}}>
+
+              {/* Top accent */}
+              <div style={{position:"absolute",top:0,left:0,right:0,height:1,
+                background:`linear-gradient(90deg,transparent,${col}66,transparent)`}}/>
+
+              {/* Header row */}
+              <div style={{display:"flex",justifyContent:"space-between",
+                alignItems:"flex-start",marginBottom:10}}>
+                <div style={{flex:1,paddingRight:8}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,
+                    fontSize:11,color:"#ffffff",letterSpacing:1,marginBottom:3}}>
+                    {tip.match}
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                      color:"#ffffff44"}}>{tip.league}</span>
+                    {tip.time&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                      color:"#ffffff33"}}>· {tip.time}</span>}
+                  </div>
+                </div>
+                {/* Confidence circle */}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,flexShrink:0}}>
+                  <div style={{width:42,height:42,borderRadius:"50%",
+                    background:`conic-gradient(${col} ${conf*3.6}deg, #ffffff0d 0deg)`,
+                    display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:"#0a0d14",
+                      display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <span style={{fontFamily:"'Orbitron',monospace",fontWeight:900,
+                        fontSize:9,color:col}}>{conf}</span>
+                    </div>
+                  </div>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33"}}>CONF%</span>
+                </div>
+              </div>
+
+              {/* Pick badge */}
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+                <div style={{background:`${col}18`,border:`1px solid ${col}44`,
+                  borderRadius:8,padding:"6px 12px",
+                  fontFamily:"'Orbitron',monospace",fontWeight:700,
+                  fontSize:12,color:col,letterSpacing:1,
+                  boxShadow:`0 0 15px ${col}33`}}>
+                  {tip.pick}
+                </div>
+                <div style={{background:`${rCol}12`,border:`1px solid ${rCol}33`,
+                  borderRadius:20,padding:"4px 10px",
+                  fontFamily:"'DM Mono',monospace",fontSize:8,
+                  color:rCol,letterSpacing:1}}>
+                  {tip.risk} RISK
+                </div>
+                {tip.odds_range&&(
+                  <div style={{background:"#ffffff08",borderRadius:20,padding:"4px 10px",
+                    fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff55",letterSpacing:1}}>
+                    ~{tip.odds_range} odds
+                  </div>
+                )}
+              </div>
+
+              {/* Market tag */}
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+                color:"#ffffff44",marginBottom:8}}>
+                📊 {tip.market}
+              </div>
+
+              {/* Confidence bar */}
+              <div style={{height:3,background:"#ffffff08",borderRadius:2,marginBottom:10,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${conf}%`,borderRadius:2,
+                  background:`linear-gradient(90deg,${col}88,${col})`,
+                  boxShadow:`0 0 8px ${col}66`,transition:"width .8s ease"}}/>
+              </div>
+
+              {/* Expand arrow */}
+              <div style={{textAlign:"center",fontFamily:"'DM Mono',monospace",
+                fontSize:9,color:"#ffffff22",letterSpacing:2}}>
+                {isExp?"▲ HIDE ANALYSIS":"▼ SEE ANALYSIS"}
+              </div>
+
+              {/* Expanded detail */}
+              {isExp && (
+                <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #ffffff08",
+                  animation:"fadeUp .2s ease"}}>
+                  {/* Reasoning */}
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+                    color:"#ffffff77",lineHeight:1.7,marginBottom:12}}>
+                    {tip.reasoning}
+                  </div>
+
+                  {/* Key stats */}
+                  {tip.key_stats?.length>0 && (
+                    <div>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                        color:col+"88",letterSpacing:2,marginBottom:8}}>KEY STATS</div>
+                      {tip.key_stats.map((s,j)=>(
+                        <div key={j} style={{display:"flex",gap:8,alignItems:"flex-start",
+                          marginBottom:6}}>
+                          <div style={{width:4,height:4,borderRadius:"50%",
+                            background:col,marginTop:5,flexShrink:0}}/>
+                          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+                            color:"#ffffff55",lineHeight:1.5}}>{s}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Match to plan */}
+                  <div style={{marginTop:12,background:"#ffffff04",borderRadius:8,
+                    padding:"8px 10px",border:"1px solid #ffffff08"}}>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                      color:"#ffffff33",letterSpacing:2,marginBottom:4}}>PLAN MATCH</div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55",lineHeight:1.6}}>
+                      {tip.odds_range?.includes("1.10") || tip.odds_range?.includes("1.1")
+                        ? "✦ Fits Plan ALPHA (×1.10)"
+                        : tip.odds_range?.includes("1.20") || tip.odds_range?.includes("1.2")
+                        ? "✦ Fits Plan BETA (×1.20)"
+                        : tip.odds_range?.includes("1.5")
+                        ? "✦ Fits Plan GAMMA (×1.50)"
+                        : "✦ Check odds with your bookmaker"}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </button>
+        );
+      })}
+
+      {/* Footer note */}
+      {tips.length>0 && !loading && (
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff18",
+          textAlign:"center",padding:"8px 0 4px",lineHeight:1.7,letterSpacing:1}}>
+          TIPS REFRESH EVERY 30 MIN · FOR RESEARCH PURPOSES ONLY<br/>
+          NEVER BET MORE THAN YOUR DAILY ROLLOVER STAKE
+        </div>
+      )}
     </div>
   );
 }
