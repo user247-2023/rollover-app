@@ -941,7 +941,9 @@ function TipsTab({ plan, preset }) {
   const [activeAIs,setActiveAIs]= useState([]);
   const [fixtures, setFixtures] = useState("");
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  }); // e.g. "2026-04-15" in user's local timezone
   const PLANS_ODDS = { alpha:1.10, beta:1.20, gamma:1.50 };
 
   const fetchTips = async () => {
@@ -950,7 +952,10 @@ function TipsTab({ plan, preset }) {
       const res = await fetch("/api/tips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today }),
+        body: JSON.stringify({
+          // Send the user's LOCAL date, not server UTC date
+          date: new Date().toLocaleDateString("en-CA", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+        }),
       });
       // Safely handle non-JSON responses
       const text = await res.text();
