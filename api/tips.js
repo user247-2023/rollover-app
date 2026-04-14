@@ -1,3 +1,5 @@
+export const config = { maxDuration: 30 };
+
 export default async function handler(req) {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -7,7 +9,7 @@ export default async function handler(req) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not set in Vercel environment variables." }), {
+    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured in Vercel." }), {
       status: 500, headers: { "Content-Type": "application/json" }
     });
   }
@@ -15,41 +17,58 @@ export default async function handler(req) {
   try {
     const body = await req.json().catch(() => ({}));
     const date = body.date || new Date().toISOString().split("T")[0];
+    const dayOfWeek = new Date(date).toLocaleDateString("en-US", { weekday: "long" });
 
-    const prompt = `Today is ${date}. You are an elite football betting analyst.
+    const prompt = `You are an elite football betting analyst. Today is ${dayOfWeek}, ${date}.
 
-Search the web for today's football matches across Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League and any other top leagues playing today.
+Based on your deep knowledge of current football statistics, team form, head-to-head records, playing styles, and tactical tendencies across all major leagues — generate 7 high-quality betting tips for matches likely playing today or this week.
 
-For each match analyse current form, head-to-head goal records, average goals per game, and team news.
+Use your knowledge of:
+- Each team's average goals per game this season
+- Home vs away goal-scoring records
+- Head-to-head historical goal averages
+- Teams known for high/low scoring games
+- Defensive vs attacking tactical setups
+- Recent injuries to key attackers or defenders
 
-Return ONLY a JSON array of 6-8 betting tips focused EXCLUSIVELY on goals markets.
-
-ALLOWED markets:
+ONLY suggest these goal markets:
 - Over/Under 1.5 Goals
 - Over/Under 2.5 Goals
 - Over/Under 3.5 Goals
 - Both Teams to Score (BTTS Yes)
 - Both Teams to Score (BTTS No)
-- First Half Over/Under 0.5 Goals
-- First Half Over/Under 1.5 Goals
+- First Half Over 0.5 Goals
+- First Half Over 1.5 Goals
 
-FORBIDDEN: Match result wins, double chance, correct score, goalscorer markets.
+DO NOT suggest: match result wins, double chance, correct score, goalscorer, cards, corners.
 
-Return ONLY this JSON format, nothing else:
+Pick matches from: Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League, MLS, or other top leagues.
+
+Prioritise tips with odds roughly in the 1.60-2.20 range for goals markets.
+
+Return ONLY a valid JSON array — no markdown, no explanation, no extra text. Just the array:
+
 [
   {
-    "match": "Team A vs Team B",
+    "match": "Exact Team A vs Exact Team B",
     "league": "League Name",
-    "time": "HH:MM GMT",
+    "time": "estimated kickoff e.g. 15:00 GMT",
     "market": "Over/Under 2.5 Goals",
     "pick": "Over 2.5 Goals",
-    "odds_range": "1.80-2.00",
-    "confidence": 82,
-    "reasoning": "Both teams average 2.8 goals per game this season. Last 5 H2H averaged 3.2 goals. Home side missing defensive midfielder.",
-    "key_stats": ["Home team: 3.1 goals/game avg", "Away team scored in last 8 away games", "H2H last 5: 3-1, 2-2, 4-1, 1-1, 3-0"],
+    "odds_range": "1.70-1.90",
+    "confidence": 84,
+    "reasoning": "Specific 2-3 sentence analysis with concrete stats and reasoning",
+    "key_stats": [
+      "Specific stat about home team goals",
+      "Specific stat about away team goals",
+      "H2H or tactical insight"
+    ],
     "risk": "LOW"
   }
-]`;
+]
+
+Risk levels: LOW = confidence 80+, MEDIUM = 65-79, HIGH = below 65.
+Generate exactly 7 tips. Sort by confidence descending. Be specific with team names and stats.`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -57,12 +76,10 @@ Return ONLY this JSON format, nothing else:
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 4000,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        max_tokens: 3000,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -71,33 +88,33 @@ Return ONLY this JSON format, nothing else:
 
     if (!response.ok) {
       return new Response(
-        JSON.stringify({ error: data?.error?.message || "Anthropic API error", code: response.status }),
+        JSON.stringify({ error: data?.error?.message || `Anthropic error ${response.status}` }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Extract all text blocks
     const textBlocks = (data.content || []).filter(b => b.type === "text");
-    const rawText = textBlocks.map(b => b.text).join("\n");
+    const rawText = textBlocks.map(b => b.text).join("\n").trim();
 
-    // Parse JSON array from response
-    let tips = [];
-    const match = rawText.match(/\[[\s\S]*\]/);
-    if (match) {
-      try { tips = JSON.parse(match[0]); } catch(e) {
-        return new Response(
-          JSON.stringify({ error: "Could not parse AI response as JSON.", raw: rawText.slice(0, 300) }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
-      }
-    } else {
+    // Extract JSON array
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
       return new Response(
-        JSON.stringify({ error: "AI did not return a JSON array.", raw: rawText.slice(0, 300) }),
+        JSON.stringify({ error: "AI response did not contain JSON. Try again.", raw: rawText.slice(0, 200) }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Clean tips
+    let tips = [];
+    try {
+      tips = JSON.parse(jsonMatch[0]);
+    } catch(e) {
+      return new Response(
+        JSON.stringify({ error: "Failed to parse AI JSON response. Try again." }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     tips = tips
       .filter(t => t.match && t.market && t.pick)
       .map(t => ({
@@ -122,7 +139,7 @@ Return ONLY this JSON format, nothing else:
 
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: err.message || "Unknown server error" }),
+      JSON.stringify({ error: err.message || "Unexpected server error" }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
