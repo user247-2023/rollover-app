@@ -974,15 +974,17 @@ function TipsTab({ plan, preset }) {
     setLoading(false);
   };
 
-  const FILTERS = ["ALL","LOW RISK","MEDIUM RISK","HIGH RISK","OVER","UNDER","BTTS"];
+  const FILTERS = ["ALL","🔥 CONFIRMED","LOW RISK","OVER GOALS","UNDER GOALS","BTTS","CORNERS","CARDS","1ST HALF"];
   const filtered = tips.filter(t => {
     if(filter==="ALL") return true;
-    if(filter==="LOW RISK")    return t.risk==="LOW";
-    if(filter==="MEDIUM RISK") return t.risk==="MEDIUM";
-    if(filter==="HIGH RISK")   return t.risk==="HIGH";
-    if(filter==="OVER")  return t.pick?.toUpperCase().includes("OVER");
-    if(filter==="UNDER") return t.pick?.toUpperCase().includes("UNDER");
-    if(filter==="BTTS")  return t.market?.toUpperCase().includes("BTTS") || t.market?.includes("Both Teams");
+    if(filter==="🔥 CONFIRMED")  return t.confirmed || t.multiAI;
+    if(filter==="LOW RISK")      return t.risk==="LOW";
+    if(filter==="OVER GOALS")    return (t.pick||"").toUpperCase().includes("OVER") && (t.market||"").toUpperCase().includes("GOAL");
+    if(filter==="UNDER GOALS")   return (t.pick||"").toUpperCase().includes("UNDER") && (t.market||"").toUpperCase().includes("GOAL");
+    if(filter==="BTTS")          return (t.market||"").toUpperCase().includes("BTTS") || (t.market||"").includes("Both Teams");
+    if(filter==="CORNERS")       return (t.market||"").toUpperCase().includes("CORNER");
+    if(filter==="CARDS")         return (t.market||"").toUpperCase().includes("CARD");
+    if(filter==="1ST HALF")      return (t.market||"").toUpperCase().includes("FIRST HALF") || (t.market||"").toUpperCase().includes("1ST HALF");
     return true;
   });
 
