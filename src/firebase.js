@@ -10,12 +10,12 @@ import { getFirestore } from "firebase/firestore";
 // ── PASTE YOUR FIREBASE CONFIG HERE ──────────────────────────────
 // Get this from: Firebase Console → Project Settings → Your Apps → SDK setup
 const firebaseConfig = {
-  apiKey:            "PASTE_YOUR_API_KEY_HERE",
-  authDomain:        "PASTE_YOUR_AUTH_DOMAIN_HERE",
-  projectId:         "PASTE_YOUR_PROJECT_ID_HERE",
-  storageBucket:     "PASTE_YOUR_STORAGE_BUCKET_HERE",
-  messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
-  appId:             "PASTE_YOUR_APP_ID_HERE",
+  apiKey: "AIzaSyAKjcRfWG2nRzJ8ZcL-vO30OarycnYX8AI",
+  authDomain: "rollover-tracker.firebaseapp.com",
+  projectId: "rollover-tracker",
+  storageBucket: "rollover-tracker.firebasestorage.app",
+  messagingSenderId: "505255862304",
+  appId: "1:505255862304:web:a93934476ff9e2ff311c45"
 };
 // ─────────────────────────────────────────────────────────────────
 
