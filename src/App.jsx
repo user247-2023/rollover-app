@@ -892,22 +892,6 @@ function SetupScreen({presetId,onSetup,onBack}){
   );
 }
 
-/* ═══════════════════ SPLASH ════════════════════════════════ */
-function SplashScreen(){
-  return(
-    <div style={S.splash}>
-      <div style={{textAlign:"center"}}>
-        <div style={S.splashLogo}>ROLLOVER</div>
-        <div style={S.splashSub}>SMART BETTING TRACKER</div>
-        <div style={S.splashBar}><div style={S.splashFill}/></div>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff22",marginTop:16,letterSpacing:3,animation:"blink 1s step-end infinite"}}>
-          INITIALIZING...
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ═══════════════════ GLOBAL CSS ════════════════════════════ */
 function GlobalCSS(){return(<style>{`
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap');
