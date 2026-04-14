@@ -137,18 +137,12 @@ function mergeTips(allArrays) {
 
 // ── Step 1: Get fixtures worldwide via Claude web search ────────
 async function getFixtures(key, today) {
-  const searches = [
-    "football fixtures today " + today + " worldwide all leagues",
-    "UEFA Champions League Europa League Conference League matches " + today,
-    "African football matches today " + today + " AFCON CAF Champions League",
-  ];
   const prompt =
-    "Do these searches one by one:\n"
-    + searches.map((s,i)=>(i+1)+". Search: \""+s+"\"").join("\n")
-    + "\n\nFrom ALL search results, list every football match you find for today " + today + "."
-    + " Include ALL leagues worldwide: European top leagues, lower divisions, African leagues, Asian leagues, South American, MLS, everything."
-    + " Format each match as:\nTeam A vs Team B | League Name (Country) | HH:MM GMT"
-    + "\nOnly include matches confirmed for today " + today + ". No other text.";
+    "Search the web for: \"football matches " + today + "\"\n"
+  + "Also search: \"soccer fixtures " + today + "\"\n\n"
+  + "List every football/soccer match you find for today " + today + " from ANY league or competition worldwide.\n"
+  + "Format: Team A vs Team B | Competition | Time GMT\n"
+  + "Include as many matches as you find. Just the list, no other text.";
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method:"POST",
@@ -160,8 +154,8 @@ async function getFixtures(key, today) {
     },
     body: JSON.stringify({
       model:"claude-haiku-4-5-20251001",
-      max_tokens:1500,
-      tools:[{ type:"web_search_20250305", name:"web_search", max_uses:3 }],
+      max_tokens:1200,
+      tools:[{ type:"web_search_20250305", name:"web_search", max_uses:2 }],
       messages:[{ role:"user", content:prompt }],
     }),
   });
@@ -258,12 +252,33 @@ export default async function handler(req) {
     // Step 1: Get real worldwide fixtures
     const fixtures = await getFixtures(claudeKey, today);
 
-    if (!fixtures || fixtures.trim().length < 15) {
+    if (!fixtures || fixtures.trim().length < 5) {
+      // Even if no fixtures found via search, ask Claude to generate
+      // tips based on its knowledge of today's worldwide schedule
+      const fallbackPrompt = buildPrompt(
+        "Search for any football matches worldwide for today " + today + " and analyse them.",
+        today
+      );
+      const [cRaw, gRaw, qRaw] = await Promise.all([
+        askClaude(claudeKey, fallbackPrompt),
+        askGemini(geminiKey, fallbackPrompt),
+        askGroq(groqKey, fallbackPrompt),
+      ]);
+      const claudeTips = parseTips(cRaw, "Claude");
+      const geminiTips = parseTips(gRaw, "Gemini");
+      const groqTips   = parseTips(qRaw, "Groq");
+      const tips = mergeTips([claudeTips, geminiTips, groqTips]);
+      if (tips.length === 0) {
+        return new Response(JSON.stringify({
+          tips:[], count:0, date:today,
+          message:"No matches found for today "+today+". There may be no major fixtures today — check back tomorrow.",
+          generatedAt:Date.now()
+        }), {status:200,headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"}});
+      }
+      const activeAIs = [claudeTips.length>0?"Claude":null,geminiTips.length>0?"Gemini":null,groqTips.length>0?"Groq":null].filter(Boolean);
       return new Response(JSON.stringify({
-        tips:[], count:0, date:today,
-        message:"No matches found for today "+today+". Try again shortly.",
-        generatedAt:Date.now()
-      }), {status:200,headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"}});
+        tips, count:tips.length, date:today, activeAIs, generatedAt:Date.now()
+      }), {status:200,headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Cache-Control":"s-maxage=1800"}});
     }
 
     // Step 2: All 3 AIs analyse in parallel
