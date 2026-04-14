@@ -3,7 +3,7 @@ export const config = { runtime: "edge" };
 const H = { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" };
 
 // ── Fetch today's fixtures from ESPN (free, no API key) ─────────
-async function fetchFixtures() {
+async function fetchFixtures(today) {
   const leagues = [
     "uefa.champions_league","uefa.europa","eng.1","esp.1",
     "ita.1","ger.1","fra.1","usa.1","ned.1","por.1",
@@ -17,17 +17,21 @@ async function fetchFixtures() {
       );
       const d = await r.json();
       return (d.events || []).map(e => {
+        // Filter: only include matches whose date matches today
+        const eventDate = e.date ? e.date.split("T")[0] : "";
+        if (eventDate !== today) return null;
+
         const c    = e.competitions?.[0];
         const home = c?.competitors?.find(x=>x.homeAway==="home")?.team?.displayName || "";
         const away = c?.competitors?.find(x=>x.homeAway==="away")?.team?.displayName || "";
         const time = e.date ? new Date(e.date).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})+" GMT" : "TBD";
         const done = c?.status?.type?.completed;
-        return home && away && !done ? `${home} vs ${away} | ${c?.status?.type?.description||lg} | ${time}` : null;
+        return home && away && !done ? `${home} vs ${away} | ${lg} | ${time}` : null;
       }).filter(Boolean);
     })
   );
   const matches = results.flatMap(r => r.status==="fulfilled" ? r.value : []);
-  return [...new Set(matches)]; // deduplicate
+  return [...new Set(matches)];
 }
 
 // ── Build analysis prompt ───────────────────────────────────────
@@ -168,8 +172,8 @@ export default async function handler(req) {
   try { const b=await req.json(); if(b.date) today=b.date; } catch(e){}
 
   try {
-    // Step 1: Get real fixtures from ESPN (no AI needed, no tokens)
-    const matches = await fetchFixtures();
+    // Step 1: Get real fixtures from ESPN filtered by today's exact date
+    const matches = await fetchFixtures(today);
 
     // Step 2: Build prompt with real fixtures
     const prompt = buildPrompt(matches, today);
