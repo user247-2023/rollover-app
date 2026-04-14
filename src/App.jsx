@@ -938,6 +938,8 @@ function TipsTab({ plan, preset }) {
   const [lastFetch,setLastFetch]= useState(null);
   const [expanded, setExpanded] = useState(null);
   const [filter,   setFilter]   = useState("ALL");
+  const [activeAIs,setActiveAIs]= useState([]);
+  const [fixtures, setFixtures] = useState("");
 
   const today = new Date().toISOString().split("T")[0];
   const PLANS_ODDS = { alpha:1.10, beta:1.20, gamma:1.50 };
@@ -958,6 +960,8 @@ function TipsTab({ plan, preset }) {
       if (data.error) throw new Error(data.error);
       if (data.message) { setError(data.message); setLoading(false); return; }
       setTips(data.tips || []);
+      setActiveAIs(data.activeAIs || []);
+      setFixtures(data.fixtureSource || "");
       setLastFetch(Date.now());
     } catch (e) {
       setError(e.message || "Failed to load tips. Check your API key.");
@@ -987,11 +991,25 @@ function TipsTab({ plan, preset }) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,
-              color:preset.color,letterSpacing:2}}>AI GOALS TIPS</div>
+              color:preset.color,letterSpacing:2}}>🤖 MULTI-AI GOALS TIPS</div>
             <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",marginTop:3,lineHeight:1.5}}>
-              Claude AI + Live Web Search<br/>
-              Goals markets only · No straight wins
+              {activeAIs.length > 0
+                ? activeAIs.join(" + ") + " active"
+                : "Claude · Gemini · Groq · Goals only"}
             </div>
+            {activeAIs.length > 0 && (
+              <div style={{display:"flex",gap:5,marginTop:7,flexWrap:"wrap"}}>
+                {activeAIs.map(ai=>(
+                  <div key={ai} style={{padding:"2px 8px",borderRadius:20,
+                    background:ai==="Claude"?"#00E5FF15":ai==="Gemini"?"#69FF4715":"#E040FB15",
+                    border:`1px solid ${ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}44`,
+                    fontFamily:"'DM Mono',monospace",fontSize:8,letterSpacing:1,
+                    color:ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}}>
+                    ✓ {ai}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{textAlign:"right"}}>
             <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginBottom:4}}>
@@ -1146,6 +1164,22 @@ function TipsTab({ plan, preset }) {
 
               {/* Pick badge */}
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+                {tip.confirmed && (
+                  <div style={{padding:"4px 10px",borderRadius:20,
+                    background:"linear-gradient(135deg,#FFD60033,#FF8F0022)",
+                    border:"1px solid #FFD60066",
+                    fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD600",
+                    letterSpacing:1,fontWeight:700}}>
+                    🔥 ALL 3 AIs AGREE
+                  </div>
+                )}
+                {!tip.confirmed && tip.multiAI && (
+                  <div style={{padding:"4px 10px",borderRadius:20,
+                    background:"#00E5FF12",border:"1px solid #00E5FF44",
+                    fontFamily:"'DM Mono',monospace",fontSize:8,color:"#00E5FF",letterSpacing:1}}>
+                    ✦ {tip.aiCount} AIs AGREE
+                  </div>
+                )}
                 <div style={{background:`${col}18`,border:`1px solid ${col}44`,
                   borderRadius:8,padding:"6px 12px",
                   fontFamily:"'Orbitron',monospace",fontWeight:700,
@@ -1210,6 +1244,24 @@ function TipsTab({ plan, preset }) {
                             color:"#ffffff55",lineHeight:1.5}}>{s}</div>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* AI Sources */}
+                  {tip.ais && tip.ais.length > 0 && (
+                    <div style={{marginTop:10,background:"#ffffff04",borderRadius:8,padding:"8px 10px",border:"1px solid #ffffff08"}}>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",letterSpacing:2,marginBottom:6}}>CONFIRMED BY</div>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        {tip.ais.map(ai=>(
+                          <div key={ai} style={{padding:"3px 10px",borderRadius:20,
+                            background:ai==="Claude"?"#00E5FF12":ai==="Gemini"?"#69FF4712":"#E040FB12",
+                            border:`1px solid ${ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}44`,
+                            fontFamily:"'DM Mono',monospace",fontSize:9,
+                            color:ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}}>
+                            ✓ {ai}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
