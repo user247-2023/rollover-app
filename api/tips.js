@@ -1,10 +1,9 @@
 export const config = { runtime: "edge" };
 const H = {"Content-Type":"application/json","Access-Control-Allow-Origin":"*"};
 
-// ── ESPN fixtures with exact date parameter ──────────────────────
+// ── ESPN: fetch without date param, filter after ─────────────────
 async function fetchFixtures(today) {
-  const espnDate = today.replace(/-/g,"");
-  const leagues  = [
+  const leagues = [
     "uefa.champions_league","uefa.europa","uefa.europa_conf",
     "eng.1","esp.1","ita.1","ger.1","fra.1","ned.1","por.1",
     "usa.1","eng.2","sco.1","tur.1","bra.1","arg.1","mex.1",
@@ -14,95 +13,103 @@ async function fetchFixtures(today) {
     leagues.map(async lg => {
       try {
         const r = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${espnDate}`,
+          `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard`,
           {signal:AbortSignal.timeout(5000)}
         );
         const d = await r.json();
-        return (d.events||[]).map(e=>{
+        return (d.events||[]).flatMap(e=>{
+          // Only keep events on today's UTC date
+          const eDate = (e.date||"").substring(0,10);
+          if(eDate !== today) return [];
           const c    = e.competitions?.[0];
           const home = c?.competitors?.find(x=>x.homeAway==="home")?.team?.displayName||"";
           const away = c?.competitors?.find(x=>x.homeAway==="away")?.team?.displayName||"";
-          const time = e.date ? new Date(e.date).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})+" GMT" : "TBD";
-          return home&&away ? {home,away,league:e.season?.slug||lg,time,matchStr:`${home} vs ${away}|${lg}|${time}`} : null;
-        }).filter(Boolean);
-      } catch(e){return [];}
+          const time = e.date
+            ? new Date(e.date).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})+" GMT"
+            : "TBD";
+          if(!home||!away) return [];
+          return [{home, away, league:e.name||lg, time}];
+        });
+      } catch(e){ return []; }
     })
   );
-  return results.flatMap(r=>r.status==="fulfilled"?r.value:[]);
+  // Deduplicate by home+away
+  const seen = new Set();
+  return results
+    .flatMap(r => r.status==="fulfilled" ? r.value : [])
+    .filter(f => {
+      const k = f.home+f.away;
+      if(seen.has(k)) return false;
+      seen.add(k); return true;
+    });
 }
 
-// ── Normalise team name for fuzzy matching ───────────────────────
-const norm = s => (s||"").toLowerCase().replace(/[^a-z0-9]/g,"").replace(/\b(fc|cf|sc|ac|as|ss|rc|rcd|rb|vfb|vfl|bsc|fk|sk|nk|hfc|afc|united|city|town|rovers|wanderers|athletic|atletico|real|borussia|hertha|bayer|sport|sporting|inter|internazionale)\b/g,"").replace(/\s+/g,"");
+// ── Team name normaliser ─────────────────────────────────────────
+const norm = s => (s||"").toLowerCase()
+  .replace(/\bfc\b|\bsc\b|\bac\b|\bas\b|\brc\b|\brb\b|\bafc\b|\bcf\b/g,"")
+  .replace(/[^a-z0-9]/g,"");
 
-// ── Validate tip match against real fixture list ─────────────────
-function isRealMatch(tipMatch, fixtures) {
-  const [tipHome="", tipAway=""] = tipMatch.split(" vs ").map(s=>norm(s.trim()));
-  if(!tipHome&&!tipAway) return false;
-  return fixtures.some(f=>{
-    const fHome=norm(f.home), fAway=norm(f.away);
-    // Both teams must partially match
-    const homeOk = fHome.includes(tipHome)||tipHome.includes(fHome)||tipHome.includes(fHome.slice(0,5))||fHome.includes(tipHome.slice(0,5));
-    const awayOk = fAway.includes(tipAway)||tipAway.includes(fAway)||tipAway.includes(fAway.slice(0,5))||fAway.includes(tipAway.slice(0,5));
-    return homeOk && awayOk;
+// ── Validate AI tip against ESPN fixture list ────────────────────
+function isReal(tipMatch, fixtures) {
+  const parts = (tipMatch||"").split(/\s+vs\s+/i);
+  if(parts.length < 2) return false;
+  const [th, ta] = parts.map(s=>norm(s));
+  return fixtures.some(f => {
+    const fh=norm(f.home), fa=norm(f.away);
+    const hOk = th.length>=4&&(fh.includes(th.slice(0,5))||th.includes(fh.slice(0,5)));
+    const aOk = ta.length>=4&&(fa.includes(ta.slice(0,5))||ta.includes(fa.slice(0,5)));
+    return hOk && aOk;
   });
 }
 
-// ── Build analysis prompt ────────────────────────────────────────
+// ── Analysis prompt ──────────────────────────────────────────────
 function buildPrompt(fixtures, today) {
-  const list = fixtures.map((f,i)=>`${i+1}. ${f.home} vs ${f.away} | ${f.league} | ${f.time}`).join("\n");
-  return `You are a football betting analyst. Today is ${today}.
+  const list = fixtures
+    .map((f,i)=>`${i+1}. ${f.home} vs ${f.away} | ${f.league} | ${f.time}`)
+    .join("\n");
+  return `Football betting analyst. Today: ${today}.
 
-THESE ARE THE ONLY REAL MATCHES TODAY FROM ESPN. Analyse ONLY these matches. Do NOT add any other match:
+REAL MATCHES FROM ESPN FOR TODAY — analyse ONLY these:
 ${list}
 
-For each match analyse: last 5 results, H2H goals, home/away record, injuries, tactical style.
-
-Pick the 6 best tips. Markets allowed:
-Over/Under 1.5, 2.5, 3.5, 4.5 Goals | BTTS Yes/No | 1st Half Over 0.5/1.5 Goals | 2nd Half Over 0.5 Goals | Over/Under 8.5/9.5/10.5 Corners | Over/Under 3.5/4.5 Cards
-
+Per match check: last 5 results, H2H goals, home/away scoring, injuries, style.
+Pick best 6 tips. Markets allowed: Over/Under 1.5/2.5/3.5/4.5 Goals, BTTS Yes/No, 1st Half Over 0.5/1.5, 2nd Half Over 0.5, Over/Under 8.5/9.5/10.5 Corners, Over/Under 3.5/4.5 Cards.
 FORBIDDEN: match winner, double chance, correct score, goalscorer.
 
-Return ONLY a raw JSON array. Start with [ end with ]. No other text:
-[{"match":"EXACT team name from list vs EXACT team name from list","league":"league","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":82,"reasoning":"2-3 sentence stat-based reason.","key_stats":["stat1","stat2","stat3"],"risk":"LOW"}]`;
+Respond with ONLY a JSON array. Nothing before [ or after ]:
+[{"match":"${fixtures[0]?.home||"Team A"} vs ${fixtures[0]?.away||"Team B"}","league":"${fixtures[0]?.league||"League"}","time":"${fixtures[0]?.time||"TBD"}","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":83,"reasoning":"Stats here.","key_stats":["stat1","stat2","stat3"],"risk":"LOW"}]`;
 }
 
 // ── AI callers ───────────────────────────────────────────────────
-async function callClaude(key,prompt){
+async function callClaude(key,p){
   if(!key) return "";
   try{
     const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01"},
-      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:2000,messages:[{role:"user",content:prompt}]}),
+      method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01"},
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:2000,messages:[{role:"user",content:p}]}),
     });
     const d=await r.json();
     return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
   }catch(e){return "";}
 }
-
-async function callGemini(key,prompt){
+async function callGemini(key,p){
   if(!key) return "";
   try{
     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
       {method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:2000,temperature:0.1}})});
+       body:JSON.stringify({contents:[{parts:[{text:p}]}],generationConfig:{maxOutputTokens:2000,temperature:0.1}})});
     const d=await r.json();
     return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
   }catch(e){return "";}
 }
-
-async function callGroq(key,prompt){
+async function callGroq(key,p){
   if(!key) return "";
   try{
     const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+      method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
       body:JSON.stringify({
         model:"llama-3.3-70b-versatile",
-        messages:[
-          {role:"system",content:"You are a football analyst. Respond ONLY with a valid JSON array starting with [ and ending with ]. No other text."},
-          {role:"user",content:prompt}
-        ],
+        messages:[{role:"system",content:"Respond ONLY with a valid JSON array. Start with [ end with ]. No other text."},{role:"user",content:p}],
         max_tokens:2000,temperature:0.1,
       }),
     });
@@ -111,50 +118,46 @@ async function callGroq(key,prompt){
   }catch(e){return "";}
 }
 
-// ── Parse + validate tips ────────────────────────────────────────
-function parseTips(text, aiName, fixtures) {
-  if(!text||text.length<5) return [];
+// ── Parse ────────────────────────────────────────────────────────
+function parse(text,name,fixtures){
+  if(!text) return [];
   let arr=[];
   try{
-    // Try direct parse first
-    if(text.trim().startsWith("[")) arr=JSON.parse(text.trim());
-    else{
-      const m=text.match(/\[[\s\S]*\]/);
-      if(m) arr=JSON.parse(m[0]);
+    const m=text.match(/\[[\s\S]*\]/);
+    if(m) arr=JSON.parse(m[0]);
+    else if(text.trim().startsWith("{")) {
+      const obj=JSON.parse(text);
+      arr=obj.tips||obj.data||Object.values(obj).find(Array.isArray)||[];
     }
   }catch(e){return [];}
-
   return arr
-    .filter(t=>t&&t.match&&t.pick)
-    .filter(t=>isRealMatch(t.match, fixtures))   // ← ONLY real matches
+    .filter(t=>t&&t.match&&t.pick&&isReal(t.match,fixtures))
     .map(t=>({
       ...t,
       id:Math.random().toString(36).substr(2,8),
       confidence:Math.min(Math.max(parseInt(t.confidence)||72,50),98),
       risk:t.risk||(t.confidence>=80?"LOW":t.confidence>=65?"MEDIUM":"HIGH"),
-      ais:[aiName],votes:1,confs:[parseInt(t.confidence)||72],
+      ais:[name],votes:1,confs:[parseInt(t.confidence)||72],
       generatedAt:Date.now(),
     }));
 }
 
-// ── Merge tips from multiple AIs ─────────────────────────────────
-function mergeTips(arrays){
+// ── Merge ────────────────────────────────────────────────────────
+function merge(arrays){
   const map={};
-  arrays.forEach((tips,idx)=>{
-    const name=["Claude","Gemini","Groq"][idx];
+  arrays.forEach((tips,i)=>{
+    const name=["Claude","Gemini","Groq"][i];
     tips.forEach(t=>{
-      const key=norm(t.match)+norm(t.pick);
-      if(!map[key]) map[key]={...t,ais:[],votes:0,confs:[]};
-      if(!map[key].ais.includes(name)) map[key].ais.push(name);
-      map[key].votes++;
-      map[key].confs.push(parseInt(t.confidence)||72);
-      if((t.reasoning||"").length>(map[key].reasoning||"").length) map[key].reasoning=t.reasoning;
-      if(t.key_stats) map[key].key_stats=[...new Set([...(map[key].key_stats||[]),...(t.key_stats||[])])].slice(0,5);
+      const k=norm(t.match)+norm(t.pick);
+      if(!map[k]) map[k]={...t,ais:[],votes:0,confs:[]};
+      if(!map[k].ais.includes(name)) map[k].ais.push(name);
+      map[k].votes++; map[k].confs.push(parseInt(t.confidence)||72);
+      if((t.reasoning||"").length>(map[k].reasoning||"").length) map[k].reasoning=t.reasoning;
+      if(t.key_stats) map[k].key_stats=[...new Set([...(map[k].key_stats||[]),...(t.key_stats||[])])].slice(0,5);
     });
   });
   return Object.values(map)
-    .map(t=>({
-      ...t,
+    .map(t=>({...t,
       confidence:Math.min(98,Math.round(t.confs.reduce((a,b)=>a+b,0)/t.confs.length+(t.votes===2?5:t.votes>=3?10:0))),
       multiAI:t.votes>=2,confirmed:t.votes>=3,aiCount:t.votes,
     }))
@@ -164,28 +167,25 @@ function mergeTips(arrays){
 // ── MAIN ─────────────────────────────────────────────────────────
 export default async function handler(req){
   if(req.method!=="POST") return new Response(JSON.stringify({error:"Method not allowed"}),{status:405,headers:H});
-
-  const claudeKey = process.env.ANTHROPIC_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY||"";
-  const groqKey   = process.env.GROQ_API_KEY||"";
+  const claudeKey=process.env.ANTHROPIC_API_KEY;
+  const geminiKey=process.env.GEMINI_API_KEY||"";
+  const groqKey  =process.env.GROQ_API_KEY||"";
   if(!claudeKey) return new Response(JSON.stringify({error:"ANTHROPIC_API_KEY not set."}),{status:500,headers:H});
 
   let today=new Date().toISOString().split("T")[0];
   try{const b=await req.json();if(b.date)today=b.date;}catch(e){}
 
   try{
-    // Step 1: Get real fixtures from ESPN with exact date
     const fixtures=await fetchFixtures(today);
 
     if(fixtures.length===0){
       return new Response(JSON.stringify({
-        tips:[],count:0,date:today,
-        message:`No fixtures found for ${today} in any major league. There may be no matches today — check back tomorrow.`,
+        tips:[],count:0,date:today,fixturesFound:0,
+        message:`ESPN found no matches for ${today}. Major leagues may be on break — try again tomorrow.`,
         generatedAt:Date.now(),
       }),{status:200,headers:{...H,"Cache-Control":"no-store"}});
     }
 
-    // Step 2: All 3 AIs analyse the SAME fixture list simultaneously
     const prompt=buildPrompt(fixtures,today);
     const [cRaw,gRaw,qRaw]=await Promise.all([
       callClaude(claudeKey,prompt),
@@ -193,25 +193,20 @@ export default async function handler(req){
       callGroq(groqKey,prompt),
     ]);
 
-    // Step 3: Parse + validate (reject any match not in ESPN fixture list)
-    const claudeTips=parseTips(cRaw,"Claude",fixtures);
-    const geminiTips=parseTips(gRaw,"Gemini",fixtures);
-    const groqTips  =parseTips(qRaw,"Groq",  fixtures);
-    const tips      =mergeTips([claudeTips,geminiTips,groqTips]);
-    const activeAIs =[claudeTips.length?"Claude":null,geminiTips.length?"Gemini":null,groqTips.length?"Groq":null].filter(Boolean);
+    const cT=parse(cRaw,"Claude",fixtures);
+    const gT=parse(gRaw,"Gemini",fixtures);
+    const qT=parse(qRaw,"Groq",  fixtures);
+    const tips=merge([cT,gT,qT]);
+    const activeAIs=[cT.length?"Claude":null,gT.length?"Gemini":null,qT.length?"Groq":null].filter(Boolean);
 
-    if(tips.length===0){
-      return new Response(JSON.stringify({
-        tips:[],count:0,date:today,activeAIs,
-        fixturesFound:fixtures.length,
-        message:`Found ${fixtures.length} matches for ${today} but no valid tips passed validation. Try again.`,
-        generatedAt:Date.now(),
-      }),{status:200,headers:{...H,"Cache-Control":"no-store"}});
-    }
+    if(tips.length===0) return new Response(JSON.stringify({
+      tips:[],count:0,date:today,fixturesFound:fixtures.length,activeAIs,
+      message:`ESPN confirmed ${fixtures.length} matches for ${today} but AIs couldn't generate valid tips. Try again.`,
+      generatedAt:Date.now(),
+    }),{status:200,headers:{...H,"Cache-Control":"no-store"}});
 
     return new Response(JSON.stringify({
-      tips,count:tips.length,date:today,activeAIs,
-      fixturesFound:fixtures.length,
+      tips,count:tips.length,date:today,fixturesFound:fixtures.length,activeAIs,
       generatedAt:Date.now(),
     }),{status:200,headers:{...H,"Cache-Control":"s-maxage=1800"}});
 
