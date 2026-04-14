@@ -4,34 +4,42 @@ const H = { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*"
 
 // ── Fetch today's fixtures from ESPN (free, no API key) ─────────
 async function fetchFixtures(today) {
+  // Format date as YYYYMMDD for ESPN API
+  const espnDate = today.replace(/-/g, "");
+
   const leagues = [
-    "uefa.champions_league","uefa.europa","eng.1","esp.1",
-    "ita.1","ger.1","fra.1","usa.1","ned.1","por.1",
-    "eng.2","sco.1","mex.1","bra.1","arg.1","tur.1",
+    "uefa.champions_league","uefa.europa","uefa.europa_conf",
+    "eng.1","esp.1","ita.1","ger.1","fra.1",
+    "usa.1","ned.1","por.1","eng.2","sco.1",
+    "mex.1","bra.1","arg.1","tur.1","rus.1",
+    "jpn.1","chn.1","sau.1","egy.1","zaf.1",
   ];
+
   const results = await Promise.allSettled(
     leagues.map(async (lg) => {
+      // Pass dates param — ESPN returns ONLY matches on that exact date
       const r = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard`,
+        `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${espnDate}`,
         { signal: AbortSignal.timeout(4000) }
       );
       const d = await r.json();
       return (d.events || []).map(e => {
-        // Filter: only include matches whose date matches today
-        const eventDate = e.date ? e.date.split("T")[0] : "";
-        if (eventDate !== today) return null;
-
         const c    = e.competitions?.[0];
         const home = c?.competitors?.find(x=>x.homeAway==="home")?.team?.displayName || "";
         const away = c?.competitors?.find(x=>x.homeAway==="away")?.team?.displayName || "";
-        const time = e.date ? new Date(e.date).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})+" GMT" : "TBD";
+        const time = e.date
+          ? new Date(e.date).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})+" GMT"
+          : "TBD";
         const done = c?.status?.type?.completed;
-        return home && away && !done ? `${home} vs ${away} | ${lg} | ${time}` : null;
+        return home && away && !done
+          ? `${home} vs ${away} | ${e.name?.split(" - ")?.[0] || lg} | ${time}`
+          : null;
       }).filter(Boolean);
     })
   );
+
   const matches = results.flatMap(r => r.status==="fulfilled" ? r.value : []);
-  return [...new Set(matches)];
+  return [...new Set(matches)]; // deduplicate
 }
 
 // ── Build analysis prompt ───────────────────────────────────────
