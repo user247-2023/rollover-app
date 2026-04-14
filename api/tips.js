@@ -17,21 +17,14 @@ export default async function handler(req) {
   const today = new Date().toISOString().split("T")[0];
 
   const prompt =
-    "Search the web for EXACTLY this query: 'football fixtures " + today + " site:bbc.co.uk OR site:skysports.com OR site:espn.com OR site:uefa.com'\n\n"
-  + "Then search: 'UEFA Champions League " + today + " fixtures'\n"
-  + "Then search: 'UEFA Europa League " + today + " fixtures'\n"
-  + "Then search: 'Premier League fixtures " + today + "'\n\n"
-  + "CRITICAL RULES:\n"
-  + "1. ONLY include matches you found in search results with a real source. If you are not 100% certain a match is today " + today + ", DO NOT include it.\n"
-  + "2. DO NOT use any match from your training data. ONLY use what you find in web search results right now.\n"
-  + "3. If you cannot find any verified matches for today, return an empty array [].\n"
-  + "4. Every match must have the correct kickoff time from the search results.\n\n"
-  + "ALLOWED BETTING MARKETS (goals only):\n"
-  + "Over 1.5 Goals, Over 2.5 Goals, Over 3.5 Goals, Under 1.5 Goals, Under 2.5 Goals, BTTS Yes, BTTS No, First Half Over 0.5, First Half Over 1.5\n\n"
-  + "FORBIDDEN: Any match result bet, double chance, correct score, goalscorer, cards, corners.\n\n"
-  + "For each real verified match, give a goals market tip with analysis based on current season stats you find via search.\n\n"
-  + "Return ONLY a JSON array. No text outside it. Empty array if no matches found:\n"
-  + '[{"match":"Team A vs Team B","league":"Competition Name","time":"20:45 GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":83,"reasoning":"Two sentences of specific stat-based reasoning from search results.","key_stats":["Home avg 2.4 goals/game","Away scored in last 7 away","H2H: 4 of last 5 had 3+ goals"],"risk":"LOW"}]';
+    "Search: 'football matches " + today + "'\n"
+  + "Search: 'Champions League Europa League fixtures " + today + "'\n\n"
+  + "List ONLY matches confirmed for today " + today + " from search results. No guessing.\n\n"
+  + "For each real match, give ONE goals-only tip:\n"
+  + "Markets allowed: Over/Under 1.5, 2.5, 3.5 Goals | BTTS Yes/No | 1st Half Over 0.5 or 1.5\n"
+  + "Forbidden: match winner, double chance, correct score, goalscorer.\n\n"
+  + "Return ONLY JSON array, no other text:\n"
+  + '[{"match":"A vs B","league":"League","time":"20:45 GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":82,"reasoning":"Stats reason.","key_stats":["stat1","stat2","stat3"],"risk":"LOW"}]';
 
   try {
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -43,13 +36,9 @@ export default async function handler(req) {
         "anthropic-beta":"web-search-2025-03-05",
       },
       body: JSON.stringify({
-        model:"claude-sonnet-4-5",
-        max_tokens:4000,
-        tools:[{
-          type:"web_search_20250305",
-          name:"web_search",
-          max_uses: 6,
-        }],
+        model:"claude-haiku-4-5-20251001",
+        max_tokens:1500,
+        tools:[{ type:"web_search_20250305", name:"web_search", max_uses:3 }],
         messages:[{ role:"user", content:prompt }],
       }),
     });
@@ -58,7 +47,7 @@ export default async function handler(req) {
 
     if (!aiRes.ok) {
       return new Response(
-        JSON.stringify({ error: aiData?.error?.message || "Anthropic error "+aiRes.status }),
+        JSON.stringify({ error: aiData?.error?.message || "API error "+aiRes.status }),
         { status:500, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"} }
       );
     }
@@ -66,17 +55,11 @@ export default async function handler(req) {
     const rawText = (aiData.content||[])
       .filter(b => b.type==="text")
       .map(b => b.text)
-      .join("")
-      .trim();
+      .join("").trim();
 
-    // Handle empty array (no matches today)
-    if (rawText.trim() === "[]" || rawText.trim() === "") {
+    if (!rawText || rawText === "[]") {
       return new Response(
-        JSON.stringify({
-          tips: [], count:0, date:today,
-          message: "No verified matches found for today "+today+". Check back on a matchday.",
-          generatedAt: Date.now()
-        }),
+        JSON.stringify({ tips:[], count:0, date:today, message:"No matches found for today. Try again later.", generatedAt:Date.now() }),
         { status:200, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"} }
       );
     }
@@ -84,19 +67,14 @@ export default async function handler(req) {
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
       return new Response(
-        JSON.stringify({ error:"AI returned no JSON. Try again.", raw:rawText.slice(0,200) }),
+        JSON.stringify({ error:"No JSON returned. Try again." }),
         { status:500, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"} }
       );
     }
 
     let tips = [];
     try { tips = JSON.parse(jsonMatch[0]); }
-    catch(e) {
-      return new Response(
-        JSON.stringify({ error:"JSON parse failed. Try again." }),
-        { status:500, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"} }
-      );
-    }
+    catch(e) { return new Response(JSON.stringify({ error:"Parse failed. Try again." }), { status:500, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"} }); }
 
     tips = tips
       .filter(t => t.match && t.market && t.pick)
@@ -110,11 +88,7 @@ export default async function handler(req) {
 
     return new Response(
       JSON.stringify({ tips, count:tips.length, date:today, generatedAt:Date.now() }),
-      { status:200, headers:{
-        "Content-Type":"application/json",
-        "Access-Control-Allow-Origin":"*",
-        "Cache-Control":"s-maxage=1800",
-      }}
+      { status:200, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Cache-Control":"s-maxage=1800"} }
     );
 
   } catch(err) {
