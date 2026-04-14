@@ -2,38 +2,58 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Content-Type", "application/json");
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error:"Method not allowed" });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY not set in Vercel environment variables." });
-  }
+  if (!apiKey) return res.status(500).json({ error:"ANTHROPIC_API_KEY not set in Vercel." });
 
   try {
-    const date = new Date().toISOString().split("T")[0];
-    const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday: "long" });
+    const today     = new Date().toISOString().split("T")[0];
+    const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday:"long" });
 
-    const prompt = `You are an elite football betting analyst. Today is ${dayOfWeek}, ${date}.
+    // ── STEP 1: Fetch today's real fixtures from TheSportsDB ─────
+    let todayMatches = [];
+    try {
+      const fRes = await fetch(
+        "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=" + today + "&s=Soccer",
+        { signal: AbortSignal.timeout(5000) }
+      );
+      const fData = await fRes.json();
+      const TOP = ["Champions","Europa","Premier","La Liga","Serie A","Bundesliga",
+                   "Ligue 1","MLS","Saudi","Eredivisie","Liga Portugal","Championship"];
+      todayMatches = (fData?.events || [])
+        .filter(e => TOP.some(t => (e.strLeague||"").includes(t)))
+        .slice(0, 14)
+        .map(e => (e.strHomeTeam + " vs " + e.strAwayTeam + " | " + e.strLeague + " | " + (e.strTime||"TBD").substring(0,5) + " GMT"));
+    } catch(e) { console.log("Fixtures fetch failed:", e.message); }
 
-Using your knowledge of current football statistics, team form, and goal-scoring patterns across major leagues, generate exactly 7 betting tips.
+    // ── STEP 2: Build prompt ──────────────────────────────────────
+    const fixtureSection = todayMatches.length > 0
+      ? "TODAY'S REAL FIXTURES (" + today + ") — ONLY analyse these matches:\n" + todayMatches.map((m,i) => (i+1)+". "+m).join("\n")
+      : "No live fixture data available. Use your knowledge of matches typically scheduled on " + dayOfWeek + " " + today + " in major European/world competitions.";
 
-ONLY use these goal markets (NO wins, NO double chance):
-- Over/Under 1.5 Goals
-- Over/Under 2.5 Goals  
-- Over/Under 3.5 Goals
-- Both Teams to Score (BTTS Yes)
-- Both Teams to Score (BTTS No)
-- First Half Over 0.5 Goals
-- First Half Over 1.5 Goals
+    const prompt = "You are an elite football betting analyst. Today is " + dayOfWeek + " " + today + ".\n\n"
+      + fixtureSection + "\n\n"
+      + "Analyse the matches above using your knowledge of:\n"
+      + "- Both teams goals per game average this season\n"
+      + "- Home/away scoring records\n"
+      + "- Head-to-head historical goal averages\n"
+      + "- Key missing players (attackers/defenders)\n"
+      + "- Playing style and tactical setup\n\n"
+      + "Generate 6-8 tips from ONLY these markets:\n"
+      + "- Over/Under 1.5 Goals\n"
+      + "- Over/Under 2.5 Goals\n"
+      + "- Over/Under 3.5 Goals\n"
+      + "- Both Teams to Score (BTTS Yes)\n"
+      + "- Both Teams to Score (BTTS No)\n"
+      + "- First Half Over 0.5 Goals\n"
+      + "- First Half Over 1.5 Goals\n\n"
+      + "FORBIDDEN: Match result, double chance, correct score, goalscorer, cards, corners.\n\n"
+      + "Return ONLY a valid JSON array, zero other text:\n"
+      + '[{"match":"Team A vs Team B","league":"League","time":"20:00 GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.75-1.95","confidence":85,"reasoning":"Both teams average 2.8 goals per game. H2H last 5 produced 3+ goals each time.","key_stats":["Home 2.9 g/game","Away scored in 9/10 away","H2H avg 3.2 goals"],"risk":"LOW"}]';
 
-Choose realistic matches from Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League or Europa League.
-
-Return ONLY a JSON array, no other text:
-[{"match":"Team A vs Team B","league":"League","time":"15:00 GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.70-1.90","confidence":84,"reasoning":"Both teams average over 2.5 goals per game. Last 5 meetings produced 3+ goals each.","key_stats":["Home team 2.8 goals/game","Away team scored in 9 of last 10","H2H avg 3.1 goals"],"risk":"LOW"}]`;
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // ── STEP 3: Call Claude ───────────────────────────────────────
+    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -43,41 +63,40 @@ Return ONLY a JSON array, no other text:
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
         max_tokens: 2500,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role:"user", content:prompt }],
       }),
+      signal: AbortSignal.timeout(25000),
     });
 
-    const data = await response.json();
+    const aiData = await aiRes.json();
+    if (!aiRes.ok) return res.status(500).json({ error: aiData?.error?.message || "Anthropic error" });
 
-    if (!response.ok) {
-      return res.status(500).json({ error: data?.error?.message || "Anthropic API error" });
-    }
-
-    const textBlocks = (data.content || []).filter(b => b.type === "text");
-    const rawText = textBlocks.map(b => b.text).join("").trim();
+    const rawText = (aiData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-
-    if (!jsonMatch) {
-      return res.status(500).json({ error: "AI did not return JSON. Try again." });
-    }
+    if (!jsonMatch) return res.status(500).json({ error:"AI did not return tips. Try again." });
 
     let tips = [];
     try { tips = JSON.parse(jsonMatch[0]); }
-    catch(e) { return res.status(500).json({ error: "Failed to parse AI response. Try again." }); }
+    catch(e) { return res.status(500).json({ error:"Could not parse AI response. Try again." }); }
 
     tips = tips
       .filter(t => t.match && t.market && t.pick)
       .map(t => ({
         ...t,
-        id: Math.random().toString(36).substr(2, 8),
-        confidence: Math.min(Math.max(parseInt(t.confidence) || 70, 50), 98),
-        risk: t.risk || (t.confidence >= 80 ? "LOW" : t.confidence >= 65 ? "MEDIUM" : "HIGH"),
+        id: Math.random().toString(36).substr(2,8),
+        confidence: Math.min(Math.max(parseInt(t.confidence)||70, 50), 98),
+        risk: t.risk||(t.confidence>=80?"LOW":t.confidence>=65?"MEDIUM":"HIGH"),
         generatedAt: Date.now(),
+        isLiveFixture: todayMatches.some(f => f.toLowerCase().includes((t.match||"").split(" vs ")[0].toLowerCase())),
       }));
 
-    return res.status(200).json({ tips, count: tips.length, date, generatedAt: Date.now() });
+    return res.status(200).json({
+      tips, count:tips.length, date:today,
+      fixturesFound: todayMatches.length,
+      generatedAt: Date.now(),
+    });
 
-  } catch (err) {
-    return res.status(500).json({ error: err.message || "Unexpected error" });
+  } catch(err) {
+    return res.status(500).json({ error: err.message||"Server error" });
   }
 }
