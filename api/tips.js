@@ -4,8 +4,6 @@
 // ║     Focuses ONLY on goals-based betting markets              ║
 // ╚══════════════════════════════════════════════════════════════╝
 
-export const config = { runtime: "edge" };
-
 const SYSTEM_PROMPT = `You are an elite football betting analyst specialising exclusively in GOALS-BASED markets.
 
 Your job is to analyse today's football matches using current form, statistics, head-to-head records, team news, and tactical patterns — then recommend bets from the following markets ONLY:
