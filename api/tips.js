@@ -5,98 +5,149 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error:"Method not allowed" });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error:"ANTHROPIC_API_KEY not set in Vercel." });
+  if (!apiKey) return res.status(500).json({ error:"ANTHROPIC_API_KEY not configured." });
 
   try {
-    const today     = new Date().toISOString().split("T")[0];
-    const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday:"long" });
+    const today = new Date().toISOString().split("T")[0]; // 2026-04-14
+    const dayOfWeek = new Date().toLocaleDateString("en-US",{weekday:"long"});
 
-    // ── STEP 1: Fetch today's real fixtures from TheSportsDB ─────
-    let todayMatches = [];
-    try {
-      const fRes = await fetch(
-        "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=" + today + "&s=Soccer",
-        { signal: AbortSignal.timeout(5000) }
-      );
-      const fData = await fRes.json();
-      const TOP = ["Champions","Europa","Premier","La Liga","Serie A","Bundesliga",
-                   "Ligue 1","MLS","Saudi","Eredivisie","Liga Portugal","Championship"];
-      todayMatches = (fData?.events || [])
-        .filter(e => TOP.some(t => (e.strLeague||"").includes(t)))
-        .slice(0, 14)
-        .map(e => (e.strHomeTeam + " vs " + e.strAwayTeam + " | " + e.strLeague + " | " + (e.strTime||"TBD").substring(0,5) + " GMT"));
-    } catch(e) { console.log("Fixtures fetch failed:", e.message); }
+    // ── STEP 1: Fetch TODAY's real fixtures from ESPN (free, no key) ──
+    const ESPN_LEAGUES = [
+      { id:"uefa.champions_league", name:"UEFA Champions League" },
+      { id:"uefa.europa",           name:"UEFA Europa League" },
+      { id:"uefa.europa_conf",      name:"UEFA Conference League" },
+      { id:"eng.1",                 name:"Premier League" },
+      { id:"esp.1",                 name:"La Liga" },
+      { id:"ita.1",                 name:"Serie A" },
+      { id:"ger.1",                 name:"Bundesliga" },
+      { id:"fra.1",                 name:"Ligue 1" },
+      { id:"usa.1",                 name:"MLS" },
+      { id:"por.1",                 name:"Primeira Liga" },
+      { id:"ned.1",                 name:"Eredivisie" },
+      { id:"eng.2",                 name:"Championship" },
+    ];
 
-    // ── STEP 2: Build prompt ──────────────────────────────────────
-    const fixtureSection = todayMatches.length > 0
-      ? "TODAY'S REAL FIXTURES (" + today + ") — ONLY analyse these matches:\n" + todayMatches.map((m,i) => (i+1)+". "+m).join("\n")
-      : "No live fixture data available. Use your knowledge of matches typically scheduled on " + dayOfWeek + " " + today + " in major European/world competitions.";
+    // Fetch all leagues in parallel
+    const fetchLeague = async (league) => {
+      try {
+        const r = await fetch(
+          "https://site.api.espn.com/apis/site/v2/sports/soccer/" + league.id + "/scoreboard",
+          { signal: AbortSignal.timeout(5000) }
+        );
+        const d = await r.json();
+        return (d.events || []).map(e => {
+          const comp = e.competitions?.[0];
+          const home = comp?.competitors?.find(c => c.homeAway==="home")?.team?.displayName || "";
+          const away = comp?.competitors?.find(c => c.homeAway==="away")?.team?.displayName || "";
+          const time = e.date ? new Date(e.date).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"})+" GMT" : "TBD";
+          const status = comp?.status?.type?.name || "";
+          return home && away ? { match: home+" vs "+away, league: league.name, time, status } : null;
+        }).filter(Boolean);
+      } catch(e) { return []; }
+    };
 
-    const prompt = "You are an elite football betting analyst. Today is " + dayOfWeek + " " + today + ".\n\n"
-      + fixtureSection + "\n\n"
-      + "Analyse the matches above using your knowledge of:\n"
-      + "- Both teams goals per game average this season\n"
-      + "- Home/away scoring records\n"
-      + "- Head-to-head historical goal averages\n"
-      + "- Key missing players (attackers/defenders)\n"
-      + "- Playing style and tactical setup\n\n"
-      + "Generate 6-8 tips from ONLY these markets:\n"
-      + "- Over/Under 1.5 Goals\n"
-      + "- Over/Under 2.5 Goals\n"
-      + "- Over/Under 3.5 Goals\n"
-      + "- Both Teams to Score (BTTS Yes)\n"
-      + "- Both Teams to Score (BTTS No)\n"
-      + "- First Half Over 0.5 Goals\n"
-      + "- First Half Over 1.5 Goals\n\n"
-      + "FORBIDDEN: Match result, double chance, correct score, goalscorer, cards, corners.\n\n"
-      + "Return ONLY a valid JSON array, zero other text:\n"
-      + '[{"match":"Team A vs Team B","league":"League","time":"20:00 GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.75-1.95","confidence":85,"reasoning":"Both teams average 2.8 goals per game. H2H last 5 produced 3+ goals each time.","key_stats":["Home 2.9 g/game","Away scored in 9/10 away","H2H avg 3.2 goals"],"risk":"LOW"}]';
+    const results = await Promise.all(ESPN_LEAGUES.map(fetchLeague));
+    const allMatches = results.flat();
 
-    // ── STEP 3: Call Claude ───────────────────────────────────────
+    // Only keep scheduled/upcoming (not finished)
+    const fixtures = allMatches
+      .filter(m => !m.status.includes("Final") && !m.status.includes("Full"))
+      .slice(0, 16);
+
+    if (fixtures.length === 0) {
+      return res.status(200).json({
+        tips: [],
+        count: 0,
+        date: today,
+        fixturesFound: 0,
+        message: "No major football matches found today. Try again tomorrow or on a matchday.",
+        generatedAt: Date.now(),
+      });
+    }
+
+    // ── STEP 2: Build prompt with ONLY today's real matches ──────────
+    const matchList = fixtures.map((m,i) =>
+      (i+1)+". "+m.match+" | "+m.league+" | "+m.time
+    ).join("\n");
+
+    const prompt =
+      "You are an elite football betting analyst. Today is "+dayOfWeek+" "+today+".\n\n"
+    + "THESE ARE THE ONLY REAL MATCHES PLAYING TODAY. Analyse ONLY these — do not add any other matches:\n\n"
+    + matchList + "\n\n"
+    + "For each match use your statistical knowledge of:\n"
+    + "- Both teams average goals per game this season\n"
+    + "- Home vs away scoring records\n"
+    + "- Head-to-head historical goal averages from last 5 meetings\n"
+    + "- Any known absences of key strikers or defenders\n"
+    + "- Whether the match is high-stakes (knockout, title race, relegation)\n\n"
+    + "Pick the 6 BEST matches for goals tips. Use ONLY these markets:\n"
+    + "- Over/Under 1.5 Goals\n"
+    + "- Over/Under 2.5 Goals\n"
+    + "- Over/Under 3.5 Goals\n"
+    + "- Both Teams to Score (BTTS Yes)\n"
+    + "- Both Teams to Score (BTTS No)\n"
+    + "- First Half Over 0.5 Goals\n"
+    + "- First Half Over 1.5 Goals\n\n"
+    + "NEVER suggest: match winner, double chance, correct score, goalscorer, cards or corners.\n\n"
+    + "Return ONLY a valid JSON array. Zero other text outside the array:\n"
+    + '[{"match":"Exact Team A vs Exact Team B","league":"League Name","time":"KO time","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.75-1.95","confidence":85,"reasoning":"Specific 2-3 sentence analysis referencing real stats and form.","key_stats":["Home team 2.9 goals/game avg","Away team scored in 9 of last 10 away","H2H last 5 avg 3.1 goals"],"risk":"LOW"}]';
+
+    // ── STEP 3: Claude analysis ───────────────────────────────────────
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key":apiKey,
+        "anthropic-version":"2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-        max_tokens: 2500,
-        messages: [{ role:"user", content:prompt }],
+        model:"claude-sonnet-4-5",
+        max_tokens:2500,
+        messages:[{ role:"user", content:prompt }],
       }),
       signal: AbortSignal.timeout(25000),
     });
 
     const aiData = await aiRes.json();
-    if (!aiRes.ok) return res.status(500).json({ error: aiData?.error?.message || "Anthropic error" });
+    if (!aiRes.ok) return res.status(500).json({ error: aiData?.error?.message||"Anthropic error" });
 
-    const rawText = (aiData.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+    const rawText = (aiData.content||[])
+      .filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+
     const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return res.status(500).json({ error:"AI did not return tips. Try again." });
+    if (!jsonMatch) return res.status(500).json({ error:"AI returned no tips. Try again." });
 
     let tips = [];
     try { tips = JSON.parse(jsonMatch[0]); }
-    catch(e) { return res.status(500).json({ error:"Could not parse AI response. Try again." }); }
+    catch(e) { return res.status(500).json({ error:"Failed to parse AI tips. Try again." }); }
 
+    // Validate tips only include today's real matches
+    const validMatches = fixtures.map(f => f.match.toLowerCase());
     tips = tips
-      .filter(t => t.match && t.market && t.pick)
+      .filter(t => {
+        if (!t.match||!t.market||!t.pick) return false;
+        // Check it's one of today's actual matches
+        const tipMatch = t.match.toLowerCase();
+        return validMatches.some(vm => {
+          const [h,a] = vm.split(" vs ");
+          return tipMatch.includes(h.split(" ")[0]) || tipMatch.includes(a.split(" ")[0]);
+        });
+      })
       .map(t => ({
         ...t,
         id: Math.random().toString(36).substr(2,8),
-        confidence: Math.min(Math.max(parseInt(t.confidence)||70, 50), 98),
+        confidence: Math.min(Math.max(parseInt(t.confidence)||70,50),98),
         risk: t.risk||(t.confidence>=80?"LOW":t.confidence>=65?"MEDIUM":"HIGH"),
         generatedAt: Date.now(),
-        isLiveFixture: todayMatches.some(f => f.toLowerCase().includes((t.match||"").split(" vs ")[0].toLowerCase())),
       }));
 
     return res.status(200).json({
       tips, count:tips.length, date:today,
-      fixturesFound: todayMatches.length,
-      generatedAt: Date.now(),
+      fixturesFound:fixtures.length,
+      generatedAt:Date.now(),
     });
 
   } catch(err) {
-    return res.status(500).json({ error: err.message||"Server error" });
+    return res.status(500).json({ error:err.message||"Server error" });
   }
 }
