@@ -948,12 +948,13 @@ function TipsTab({ plan, preset }) {
       const res = await fetch("/api/tips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: today,
-          planOdds: Object.values(PLANS_ODDS),
-        }),
+        body: JSON.stringify({ date: today }),
       });
-      const data = await res.json();
+      // Safely handle non-JSON responses
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch(e) { throw new Error("Server returned an unexpected response. Check Vercel logs."); }
       if (data.error) throw new Error(data.error);
       setTips(data.tips || []);
       setLastFetch(Date.now());
