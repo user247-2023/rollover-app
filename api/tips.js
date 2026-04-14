@@ -180,7 +180,14 @@ export default async function handler(req) {
       { status:500, headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"} });
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  // Use local date sent from browser (handles Tanzania EAT UTC+3)
+  let today;
+  try {
+    const body = await req.json();
+    today = body.date || new Date().toISOString().split("T")[0];
+  } catch(e) {
+    today = new Date().toISOString().split("T")[0];
+  }
 
   try {
     // Step 1: Get today's real fixtures
