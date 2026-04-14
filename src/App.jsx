@@ -962,7 +962,7 @@ function TipsTab({ plan, preset }) {
       let data;
       try { data = JSON.parse(text); }
       catch(e) { throw new Error("Server returned an unexpected response. Check Vercel logs."); }
-      if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
       if (data.message) { setError(data.message); setLoading(false); return; }
       setTips(data.tips || []);
       setActiveAIs(data.activeAIs || []);
@@ -1069,7 +1069,7 @@ function TipsTab({ plan, preset }) {
           <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
             color:"#FF1744",marginBottom:8}}>✕ FAILED TO LOAD</div>
           <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#FF174488",
-            lineHeight:1.6,marginBottom:12}}>{error}</div>
+            lineHeight:1.6,marginBottom:12,wordBreak:"break-word"}}>{String(error)}</div>
           <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",
             lineHeight:1.7}}>
             Make sure you have added your ANTHROPIC_API_KEY to Vercel:<br/>
@@ -1114,7 +1114,12 @@ function TipsTab({ plan, preset }) {
       {tips.length>0 && !loading && (
         <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",
           letterSpacing:2,marginBottom:10}}>
-          {filtered.length} TIP{filtered.length!==1?"S":""} · TODAY {today}
+          {filtered.length} TIP{filtered.length!==1?"S":""} ·{" "}
+          {lastFetch && (() => {
+            const d = new Date(tips[0]?.generatedAt||Date.now());
+            return today === tips[0]?.match ? "TODAY" : "UPCOMING FIXTURES";
+          })()}
+          {" "}· {today}
         </div>
       )}
 
