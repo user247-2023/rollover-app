@@ -177,7 +177,7 @@ function fmtList(arr) {
 // ================================================================
 // Build prompt
 // ================================================================
-function buildPrompt(fixtures, date) {
+function buildPrompt(fixtures, date, tipsNeeded=20) {
   const c = categorise(fixtures);
   return `You are a professional football betting analyst. Date: ${date}.
 
@@ -217,7 +217,7 @@ ${fmtList(c.women)}
 ${fmtList(c.others)}
 
 ================================================================
-MANDATORY - GENERATE EXACTLY 20 TIPS
+MANDATORY - GENERATE ${tipsNeeded} TIPS (max available from today's matches)
 ================================================================
 Required distribution (skip category if no matches today, give those tips to other categories):
 - 3 tips from ENGLAND (Premier League + lower leagues)
@@ -325,8 +325,11 @@ function isReal(tipMatch, fixtures) {
   if(th.length < 3 || ta.length < 3) return false;
   return fixtures.some(f => {
     const fh=norm(f.home), fa=norm(f.away);
-    const hOk = fh.length>=3&&(fh.includes(th.slice(0,5))||th.includes(fh.slice(0,5)));
-    const aOk = fa.length>=3&&(fa.includes(ta.slice(0,5))||ta.includes(fa.slice(0,5)));
+    // Accept if either: full match, partial match (5 chars), or one contains the other
+    const hOk = fh===th || fh.includes(th) || th.includes(fh) ||
+                (th.length>=4 && (fh.includes(th.slice(0,4)) || th.includes(fh.slice(0,4))));
+    const aOk = fa===ta || fa.includes(ta) || ta.includes(fa) ||
+                (ta.length>=4 && (fa.includes(ta.slice(0,4)) || ta.includes(fa.slice(0,4))));
     return hOk && aOk;
   });
 }
@@ -401,7 +404,8 @@ export default async function handler(req, res) {
       generatedAt:Date.now(),
     });
 
-    const prompt = buildPrompt(fixtures, today);
+    const tipsNeeded = Math.min(20, fixtures.length * 3);
+    const prompt = buildPrompt(fixtures, today, tipsNeeded);
     const [cRaw,gRaw,qRaw] = await Promise.all([
       callClaude(claudeKey, prompt),
       callGemini(geminiKey, prompt),
