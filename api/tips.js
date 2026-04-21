@@ -1,7 +1,7 @@
-// Standard Node.js serverless function — no edge runtime
+// Standard Node.js serverless function - no edge runtime
 const H = { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" };
 
-// ── Target leagues only ─────────────────────────────────────────
+// -- Target leagues only -----------------------------------------
 const TARGET_LEAGUES = [
   // European Top 5
   "premier league","la liga","serie a","bundesliga","ligue 1",
@@ -12,7 +12,7 @@ const TARGET_LEAGUES = [
   // Other Europe
   "eredivisie","primeira liga","scottish premiership",
   "pro league","belgian","jupiler",
-  "süper lig","super lig","turkiye","turkish",
+  "super lig","super lig","turkiye","turkish",
   "saudi","saudi pro league","spl",
   "bundesliga 2","2. bundesliga",
   "regionalliga bayern","regionalliga southwest","regionalliga",
@@ -32,7 +32,7 @@ function isTargetLeague(leagueName) {
   return TARGET_LEAGUES.some(t => l.includes(t));
 }
 
-// ── API-Football (works, covers 1000+ leagues) ──────────────────
+// -- API-Football (works, covers 1000+ leagues) ------------------
 async function fetchFixtures(dateStr, apiKey) {
   if(!apiKey) return [];
   try {
@@ -61,12 +61,12 @@ async function fetchFixtures(dateStr, apiKey) {
   } catch(e) { return []; }
 }
 
-// ── Normalise team name ─────────────────────────────────────────
+// -- Normalise team name -----------------------------------------
 const norm = s => (s||"").toLowerCase()
   .replace(/\bfc\b|\bsc\b|\bac\b|\bafc\b|\bcf\b|\bfk\b|\bsk\b|\bif\b|\bbk\b/g,"")
   .replace(/[^a-z0-9]/g,"");
 
-// ── Validate tip is a real fixture ──────────────────────────────
+// -- Validate tip is a real fixture ------------------------------
 function isReal(tipMatch, fixtures) {
   const parts = (tipMatch||"").split(/\s+vs\s+/i);
   if(parts.length < 2) return false;
@@ -80,7 +80,7 @@ function isReal(tipMatch, fixtures) {
   });
 }
 
-// ── Build analysis prompt ───────────────────────────────────────
+// -- Build analysis prompt ---------------------------------------
 function buildPrompt(fixtures, date) {
   // Separate fixtures by league category
   const cupMatches = fixtures.filter(f => isTargetLeague(f.league) &&
@@ -90,7 +90,7 @@ function buildPrompt(fixtures, date) {
   const topLeagues = fixtures.filter(f =>
     ["premier league","la liga","serie a","bundesliga","ligue 1","eredivisie"].some(k => f.league.toLowerCase().includes(k)));
   const otherLeagues = fixtures.filter(f =>
-    ["belgian","jupiler","bulgarian","efbet","süper lig","super lig","saudi","regionalliga","mls","copa"].some(k => f.league.toLowerCase().includes(k)));
+    ["belgian","jupiler","bulgarian","efbet","super lig","super lig","saudi","regionalliga","mls","copa"].some(k => f.league.toLowerCase().includes(k)));
 
   const formatList = (arr, label) => arr.length > 0
     ? `\n${label}:\n${arr.slice(0,8).map((f,i)=>`${i+1}. ${f.home} vs ${f.away} | ${f.league} | ${f.time}`).join("\n")}`
@@ -103,24 +103,24 @@ function buildPrompt(fixtures, date) {
   return `Professional football betting analyst. Date: ${date}.
 
 TODAY'S MATCHES BY LEAGUE:
-${formatList(cupMatches,"🏆 EUROPEAN CUPS (UCL/UEL/UECL)")}
-${formatList(topLeagues,"⭐ TOP 5 LEAGUES")}
-${formatList(englandMatches,"🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND LOWER LEAGUES (Championship/L1/L2/National)")}
-${formatList(otherLeagues,"🌍 OTHER LEAGUES (Belgian/Bulgarian/Turkish/Saudi/Regionalliga/MLS)")}
+${formatList(cupMatches,"EUROPEAN CUPS (UCL/UEL/UECL)")}
+${formatList(topLeagues,"TOP 5 LEAGUES")}
+${formatList(englandMatches,"ENGLAND LOWER LEAGUES (Championship/L1/L2/National)")}
+${formatList(otherLeagues,"OTHER LEAGUES (Belgian/Bulgarian/Turkish/Saudi/Regionalliga/MLS)")}
 
 FULL LIST:
 ${allList}
 
-═══ MANDATORY TIP DISTRIBUTION ═══
-You MUST generate tips from THESE SPECIFIC CATEGORIES — not just UCL or Premier League:
+=== MANDATORY TIP DISTRIBUTION ===
+You MUST generate tips from THESE SPECIFIC CATEGORIES - not just UCL or Premier League:
 - AT LEAST 2 tips from England lower leagues (Championship, League One, League Two, National League)
 - AT LEAST 1 tip from Belgian Pro League OR Bulgarian First League OR German Regionalliga
-- AT LEAST 1 tip from Turkish Süper Lig OR Saudi Pro League
+- AT LEAST 1 tip from Turkish Super Lig OR Saudi Pro League
 - AT LEAST 1 tip from European cups (UCL/UEL) IF available
 - AT LEAST 1 tip from Top 5 league (EPL/La Liga/Serie A/Bundesliga/Ligue 1)
 - REMAINING tips: any league from the list above
 
-═══ ANALYSIS FRAMEWORK (apply to EVERY tip) ═══
+=== ANALYSIS FRAMEWORK (apply to EVERY tip) ===
 1. Current form last 5-10 matches (results, goals, streak)
 2. Home vs away record separately this season
 3. Key injuries and suspensions
@@ -131,7 +131,7 @@ You MUST generate tips from THESE SPECIFIC CATEGORIES — not just UCL or Premie
 8. Shots/game, clean sheets, corners/game, cards/game
 9. Schedule congestion, travel fatigue
 
-═══ MARKETS ALLOWED ═══
+=== MARKETS ALLOWED ===
 Over/Under 1.5/2.5/3.5/4.5 Goals | BTTS Yes/No |
 1st Half Over 0.5/1.5 | 2nd Half Over 0.5/1.5 |
 Over/Under 8.5/9.5/10.5/11.5 Corners |
@@ -139,14 +139,14 @@ Over/Under 3.5/4.5/5.5 Cards | Both Halves Over 0.5 | Clean Sheet Yes
 
 FORBIDDEN: Match winner, double chance, correct score, goalscorer, handicap.
 
-Generate 8-10 tips. Vary the markets — corners, cards, halftime, BTTS, goals.
+Generate 8-10 tips. Vary the markets - corners, cards, halftime, BTTS, goals.
 confidence: 65-92. risk: LOW=80+, MEDIUM=65-79, HIGH<65.
 
 Return ONLY JSON array, nothing before [ or after ]:
 [{"match":"Home vs Away","league":"League (Country)","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":84,"reasoning":"Specific 3-4 sentence analysis with real stats, xG, H2H, injuries.","key_stats":["Home xG 2.1/game","Away striker out","H2H: 4/5 had 3+ goals","Away 2.3g conceded","Both teams top-6 attack"],"risk":"LOW"}]`;
 }
 
-// ── AI callers ──────────────────────────────────────────────────
+// -- AI callers --------------------------------------------------
 async function callClaude(key, p) {
   if(!key) return "";
   try {
@@ -194,7 +194,7 @@ async function callGroq(key, p) {
   } catch(e) { return ""; }
 }
 
-// ── Parse + validate ────────────────────────────────────────────
+// -- Parse + validate --------------------------------------------
 function parse(text, name, fixtures) {
   if(!text) return [];
   let arr = [];
@@ -215,7 +215,7 @@ function parse(text, name, fixtures) {
     }));
 }
 
-// ── Merge tips from multiple AIs ────────────────────────────────
+// -- Merge tips from multiple AIs --------------------------------
 function merge(arrays) {
   const map = {};
   arrays.forEach((tips,i) => {
@@ -237,7 +237,7 @@ function merge(arrays) {
     .sort((a,b)=>b.confirmed-a.confirmed||b.multiAI-a.multiAI||b.confidence-a.confidence);
 }
 
-// ── MAIN HANDLER ────────────────────────────────────────────────
+// -- MAIN HANDLER ------------------------------------------------
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin","*");
   res.setHeader("Content-Type","application/json");
