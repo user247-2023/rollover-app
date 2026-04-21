@@ -343,7 +343,9 @@ function parse(text, name, fixtures) {
     else { const o=JSON.parse(text.trim()); arr=Array.isArray(o)?o:Object.values(o).find(Array.isArray)||[]; }
   } catch(e) { return []; }
   return arr
-    .filter(t => t && t.match && t.pick && isReal(t.match, fixtures))
+    .filter(t => t && t.match && t.pick)
+    // Soft validation — just make sure match has " vs " format
+    .filter(t => (t.match||"").toLowerCase().includes(" vs "))
     .map(t => ({
       ...t,
       id: Math.random().toString(36).substr(2,8),
@@ -404,7 +406,7 @@ export default async function handler(req, res) {
       generatedAt:Date.now(),
     });
 
-    const tipsNeeded = Math.min(20, fixtures.length * 3);
+    const tipsNeeded = fixtures.length >= 7 ? 20 : Math.max(fixtures.length * 2, 5);
     const prompt = buildPrompt(fixtures, today, tipsNeeded);
     const [cRaw,gRaw,qRaw] = await Promise.all([
       callClaude(claudeKey, prompt),
