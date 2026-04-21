@@ -82,47 +82,68 @@ function isReal(tipMatch, fixtures) {
 
 // ── Build analysis prompt ───────────────────────────────────────
 function buildPrompt(fixtures, date) {
-  const list = fixtures.slice(0,25).map((f,i) =>
+  // Separate fixtures by league category
+  const cupMatches = fixtures.filter(f => isTargetLeague(f.league) &&
+    ["champions","europa","conference","ucl","uel"].some(k => f.league.toLowerCase().includes(k)));
+  const englandMatches = fixtures.filter(f =>
+    ["championship","league one","league two","national league"].some(k => f.league.toLowerCase().includes(k)));
+  const topLeagues = fixtures.filter(f =>
+    ["premier league","la liga","serie a","bundesliga","ligue 1","eredivisie"].some(k => f.league.toLowerCase().includes(k)));
+  const otherLeagues = fixtures.filter(f =>
+    ["belgian","jupiler","bulgarian","efbet","süper lig","super lig","saudi","regionalliga","mls","copa"].some(k => f.league.toLowerCase().includes(k)));
+
+  const formatList = (arr, label) => arr.length > 0
+    ? `\n${label}:\n${arr.slice(0,8).map((f,i)=>`${i+1}. ${f.home} vs ${f.away} | ${f.league} | ${f.time}`).join("\n")}`
+    : "";
+
+  const allList = fixtures.slice(0,30).map((f,i)=>
     `${i+1}. ${f.home} vs ${f.away} | ${f.league} | ${f.time}`
   ).join("\n");
 
   return `Professional football betting analyst. Date: ${date}.
 
-REAL MATCHES FROM API-FOOTBALL — analyse ONLY these:
-${list}
+TODAY'S MATCHES BY LEAGUE:
+${formatList(cupMatches,"🏆 EUROPEAN CUPS (UCL/UEL/UECL)")}
+${formatList(topLeagues,"⭐ TOP 5 LEAGUES")}
+${formatList(englandMatches,"🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND LOWER LEAGUES (Championship/L1/L2/National)")}
+${formatList(otherLeagues,"🌍 OTHER LEAGUES (Belgian/Bulgarian/Turkish/Saudi/Regionalliga/MLS)")}
 
-For each tip analyse ALL of:
+FULL LIST:
+${allList}
+
+═══ MANDATORY TIP DISTRIBUTION ═══
+You MUST generate tips from THESE SPECIFIC CATEGORIES — not just UCL or Premier League:
+- AT LEAST 2 tips from England lower leagues (Championship, League One, League Two, National League)
+- AT LEAST 1 tip from Belgian Pro League OR Bulgarian First League OR German Regionalliga
+- AT LEAST 1 tip from Turkish Süper Lig OR Saudi Pro League
+- AT LEAST 1 tip from European cups (UCL/UEL) IF available
+- AT LEAST 1 tip from Top 5 league (EPL/La Liga/Serie A/Bundesliga/Ligue 1)
+- REMAINING tips: any league from the list above
+
+═══ ANALYSIS FRAMEWORK (apply to EVERY tip) ═══
 1. Current form last 5-10 matches (results, goals, streak)
 2. Home vs away record separately this season
-3. Key injuries and suspensions (missing strikers, defenders)
-4. Motivation: title race, relegation, European spot, dead rubber, cup knockout
-5. Head-to-head last 5-6 meetings (results and goals)
-6. Tactical matchup (pressing, counter-attack, possession styles)
-7. Expected Goals xG for and against this season
-8. Stats: shots/game, clean sheets, corners/game, cards/game
-9. Schedule congestion, travel fatigue, weather if relevant
+3. Key injuries and suspensions
+4. Motivation: title, relegation, European spot, dead rubber, cup knockout
+5. Head-to-head last 5-6 meetings (goals and results)
+6. Tactical matchup (pressing, counter-attack, possession)
+7. Expected Goals xG for/against
+8. Shots/game, clean sheets, corners/game, cards/game
+9. Schedule congestion, travel fatigue
 
-Markets allowed:
-Over/Under 1.5/2.5/3.5/4.5 Goals | BTTS Yes/No | 1st Half Over 0.5/1.5 Goals |
-2nd Half Over 0.5/1.5 Goals | Over/Under 8.5/9.5/10.5/11.5 Corners |
-Over/Under 3.5/4.5/5.5 Cards | Both Halves Over 0.5 Goals | Clean Sheet Yes
+═══ MARKETS ALLOWED ═══
+Over/Under 1.5/2.5/3.5/4.5 Goals | BTTS Yes/No |
+1st Half Over 0.5/1.5 | 2nd Half Over 0.5/1.5 |
+Over/Under 8.5/9.5/10.5/11.5 Corners |
+Over/Under 3.5/4.5/5.5 Cards | Both Halves Over 0.5 | Clean Sheet Yes
 
 FORBIDDEN: Match winner, double chance, correct score, goalscorer, handicap.
 
-Pick 7-8 tips across DIFFERENT leagues and DIFFERENT markets.
-Focus on these leagues ONLY:
-• Champions League, Europa League, Conference League
-• Premier League, Championship, League One, League Two, National League
-• La Liga, Serie A, Bundesliga, Bundesliga 2, Ligue 1
-• Eredivisie, Primeira Liga, Scottish Premiership
-• Belgian Pro League, Bulgarian First League
-• Süper Lig (Turkey), Saudi Pro League
-• German Regionalliga Bayern, German Regionalliga Southwest
-• MLS, Copa Libertadores, World Cup, Nations League
-Vary the markets — goals, corners, cards, halftime — not just Over 2.5.
+Generate 8-10 tips. Vary the markets — corners, cards, halftime, BTTS, goals.
+confidence: 65-92. risk: LOW=80+, MEDIUM=65-79, HIGH<65.
 
 Return ONLY JSON array, nothing before [ or after ]:
-[{"match":"Home vs Away","league":"League (Country)","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":84,"reasoning":"Home avg 2.6g/game (xG 2.1). Away striker suspended. H2H 4/5 had 3+ goals. Both teams press high.","key_stats":["Home xG 2.1/game","Away top scorer out","H2H: 4/5 had 3+ goals","Away 2.3g conceded away","Both teams top-6 attack"],"risk":"LOW"}]`;
+[{"match":"Home vs Away","league":"League (Country)","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":84,"reasoning":"Specific 3-4 sentence analysis with real stats, xG, H2H, injuries.","key_stats":["Home xG 2.1/game","Away striker out","H2H: 4/5 had 3+ goals","Away 2.3g conceded","Both teams top-6 attack"],"risk":"LOW"}]`;
 }
 
 // ── AI callers ──────────────────────────────────────────────────
