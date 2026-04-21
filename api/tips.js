@@ -1,6 +1,37 @@
 // Standard Node.js serverless function — no edge runtime
 const H = { "Content-Type":"application/json", "Access-Control-Allow-Origin":"*" };
 
+// ── Target leagues only ─────────────────────────────────────────
+const TARGET_LEAGUES = [
+  // European Top 5
+  "premier league","la liga","serie a","bundesliga","ligue 1",
+  // European Cups
+  "champions league","europa league","conference league","uefa",
+  // England
+  "championship","league one","league two","national league",
+  // Other Europe
+  "eredivisie","primeira liga","scottish premiership",
+  "pro league","belgian","jupiler",
+  "süper lig","super lig","turkiye","turkish",
+  "saudi","saudi pro league","spl",
+  "bundesliga 2","2. bundesliga",
+  "regionalliga bayern","regionalliga southwest","regionalliga",
+  "primera division","segunda division",
+  "serie b","ligue 2",
+  "primera liga","liga portugal",
+  "superliga","bulgarian","efbet",
+  // International
+  "world cup","nations league","euro","copa america","afcon",
+  "champions","copa libertadores","copa sudamericana",
+  // USA
+  "mls","major league soccer",
+];
+
+function isTargetLeague(leagueName) {
+  const l = (leagueName||"").toLowerCase();
+  return TARGET_LEAGUES.some(t => l.includes(t));
+}
+
 // ── API-Football (works, covers 1000+ leagues) ──────────────────
 async function fetchFixtures(dateStr, apiKey) {
   if(!apiKey) return [];
@@ -14,7 +45,9 @@ async function fetchFixtures(dateStr, apiKey) {
     return (d.response||[])
       .filter(f => {
         const status = f.fixture?.status?.short;
-        return ["NS","TBD","PST"].includes(status); // not started only
+        if(!["NS","TBD","PST"].includes(status)) return false;
+        const leagueName = `${f.league?.name||""} ${f.league?.country||""}`;
+        return isTargetLeague(leagueName);
       })
       .map(f => ({
         home:   f.teams?.home?.name||"",
@@ -76,11 +109,17 @@ Over/Under 3.5/4.5/5.5 Cards | Both Halves Over 0.5 Goals | Clean Sheet Yes
 
 FORBIDDEN: Match winner, double chance, correct score, goalscorer, handicap.
 
-Pick 7-8 tips across DIFFERENT leagues and DIFFERENT markets (not just Over 2.5).
-Include lower leagues — Championship, Belgian, Saudi, Turkish, German etc.
-reasoning: 3-4 sentences with specific stats.
-key_stats: 4-5 items including xG, form, H2H, injuries.
-confidence: 65-92 only. risk: LOW=80+, MEDIUM=65-79, HIGH<65.
+Pick 7-8 tips across DIFFERENT leagues and DIFFERENT markets.
+Focus on these leagues ONLY:
+• Champions League, Europa League, Conference League
+• Premier League, Championship, League One, League Two, National League
+• La Liga, Serie A, Bundesliga, Bundesliga 2, Ligue 1
+• Eredivisie, Primeira Liga, Scottish Premiership
+• Belgian Pro League, Bulgarian First League
+• Süper Lig (Turkey), Saudi Pro League
+• German Regionalliga Bayern, German Regionalliga Southwest
+• MLS, Copa Libertadores, World Cup, Nations League
+Vary the markets — goals, corners, cards, halftime — not just Over 2.5.
 
 Return ONLY JSON array, nothing before [ or after ]:
 [{"match":"Home vs Away","league":"League (Country)","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":84,"reasoning":"Home avg 2.6g/game (xG 2.1). Away striker suspended. H2H 4/5 had 3+ goals. Both teams press high.","key_stats":["Home xG 2.1/game","Away top scorer out","H2H: 4/5 had 3+ goals","Away 2.3g conceded away","Both teams top-6 attack"],"risk":"LOW"}]`;
