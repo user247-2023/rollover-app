@@ -327,25 +327,63 @@ function isReal(tipMatch, fixtures) {
 }
 
 function parse(text, name, fixtures) {
-  if(!text) return [];
+  if(!text || text.length < 5) return { tips:[], debug:`${name}: empty response` };
   let arr = [];
+  let debug = "";
+
+  // Strategy 1: find JSON array in text
   try {
     const m = text.match(/\[[\s\S]*\]/);
-    if(m) arr = JSON.parse(m[0]);
-    else { const o=JSON.parse(text.trim()); arr=Array.isArray(o)?o:Object.values(o).find(Array.isArray)||[]; }
-  } catch(e) { return []; }
-  return arr
-    .filter(t => t && t.match && t.pick)
-    // Soft validation — just make sure match has " vs " format
-    .filter(t => (t.match||"").toLowerCase().includes(" vs "))
+    if(m) {
+      arr = JSON.parse(m[0]);
+      debug = `${name}: parsed ${arr.length} from array match`;
+    }
+  } catch(e) {
+    debug = `${name}: array parse failed - ${e.message}`;
+  }
+
+  // Strategy 2: if empty, try parsing as object with nested array
+  if(arr.length === 0) {
+    try {
+      const cleaned = text.trim().replace(/^```json\s*/,"").replace(/```$/,"").trim();
+      const o = JSON.parse(cleaned);
+      if(Array.isArray(o)) arr = o;
+      else arr = o.tips || o.predictions || o.matches || o.data || Object.values(o).find(Array.isArray) || [];
+      debug = `${name}: parsed ${arr.length} from object`;
+    } catch(e) {
+      if(!debug) debug = `${name}: object parse failed`;
+    }
+  }
+
+  // Strategy 3: manual extraction of JSON-like objects
+  if(arr.length === 0) {
+    const objMatches = text.match(/\{[^{}]*"match"[^{}]*\}/g);
+    if(objMatches) {
+      arr = objMatches.map(s => { try { return JSON.parse(s); } catch(e) { return null; }}).filter(Boolean);
+      debug = `${name}: extracted ${arr.length} manually`;
+    }
+  }
+
+  const valid = arr
+    .filter(t => t && (t.match||t.teams||t.fixture) && (t.pick||t.bet||t.selection))
     .map(t => ({
-      ...t,
-      id: Math.random().toString(36).substr(2,8),
+      match: t.match || t.teams || t.fixture || "",
+      league: t.league || t.competition || "Unknown",
+      time: t.time || t.kickoff || "TBD",
+      market: t.market || t.type || "",
+      pick: t.pick || t.bet || t.selection || "",
+      odds_range: t.odds_range || t.odds || "",
       confidence: Math.min(Math.max(parseInt(t.confidence)||72,50),98),
-      risk: t.risk||(t.confidence>=80?"LOW":t.confidence>=65?"MEDIUM":"HIGH"),
+      reasoning: t.reasoning || t.analysis || t.reason || "",
+      key_stats: t.key_stats || t.stats || [],
+      risk: t.risk || (parseInt(t.confidence)>=80?"LOW":parseInt(t.confidence)>=65?"MEDIUM":"HIGH"),
+      id: Math.random().toString(36).substr(2,8),
       ais:[name], votes:1, confs:[parseInt(t.confidence)||72],
       generatedAt: Date.now(),
-    }));
+    }))
+    .filter(t => t.match && t.pick);
+
+  return { tips: valid, debug: `${name}: ${valid.length} valid tips` };
 }
 
 function merge(arrays) {
@@ -406,15 +444,24 @@ export default async function handler(req, res) {
       callGroq(groqKey,     prompt),
     ]);
 
-    const cT=parse(cRaw,"Claude",fixtures);
-    const gT=parse(gRaw,"Gemini",fixtures);
-    const qT=parse(qRaw,"Groq",  fixtures);
+    const cP=parse(cRaw,"Claude",fixtures);
+    const gP=parse(gRaw,"Gemini",fixtures);
+    const qP=parse(qRaw,"Groq",  fixtures);
+    const cT=cP.tips, gT=gP.tips, qT=qP.tips;
+    const debugInfo = [cP.debug, gP.debug, qP.debug].join(" | ");
+
     const tips=merge([cT,gT,qT]);
     const activeAIs=[cT.length?"Claude":null,gT.length?"Gemini":null,qT.length?"Groq":null].filter(Boolean);
 
     if(tips.length===0) return res.status(200).json({
       tips:[], count:0, date:today, fixturesFound:fixtures.length, activeAIs,
-      message:`Found ${fixtures.length} matches but tips failed validation. Try again.`,
+      debug: debugInfo,
+      rawSample: {
+        claude: (cRaw||"").slice(0,400),
+        gemini: (gRaw||"").slice(0,400),
+        groq: (qRaw||"").slice(0,400),
+      },
+      message:`Found ${fixtures.length} matches. AI debug: ${debugInfo}`,
       generatedAt:Date.now(),
     });
 
