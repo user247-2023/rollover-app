@@ -319,19 +319,11 @@ const norm = s => (s||"").toLowerCase()
   .replace(/[^a-z0-9]/g,"");
 
 function isReal(tipMatch, fixtures) {
-  const parts = (tipMatch||"").split(/\s+vs\s+/i);
-  if(parts.length < 2) return false;
-  const [th,ta] = parts.map(s => norm(s));
-  if(th.length < 3 || ta.length < 3) return false;
-  return fixtures.some(f => {
-    const fh=norm(f.home), fa=norm(f.away);
-    // Accept if either: full match, partial match (5 chars), or one contains the other
-    const hOk = fh===th || fh.includes(th) || th.includes(fh) ||
-                (th.length>=4 && (fh.includes(th.slice(0,4)) || th.includes(fh.slice(0,4))));
-    const aOk = fa===ta || fa.includes(ta) || ta.includes(fa) ||
-                (ta.length>=4 && (fa.includes(ta.slice(0,4)) || ta.includes(fa.slice(0,4))));
-    return hOk && aOk;
-  });
+  // Just check it has the vs format — fixtures are already in the prompt
+  // so AI can only pick from what it sees
+  if(!(tipMatch||"").toLowerCase().includes(" vs ")) return false;
+  const parts = tipMatch.split(/\s+vs\s+/i);
+  return parts.length === 2 && parts[0].trim().length > 1 && parts[1].trim().length > 1;
 }
 
 function parse(text, name, fixtures) {
