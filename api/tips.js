@@ -20,7 +20,10 @@ export default async function handler(req, res) {
     try {
       var r = await fetch(RAILWAY + "/api/tips", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": process.env.INTERNAL_API_KEY || "",
+        },
         body: JSON.stringify({ date: today }),
       });
       var data = await r.json();
