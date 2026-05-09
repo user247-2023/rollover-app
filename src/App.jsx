@@ -54,6 +54,30 @@ function fmtDual(tsh) {
   return `${fmt(tsh)} (≈ $${usd.toFixed(2)})`;
 }
 
+// ── Smart Staking: Kelly Criterion ───────────────────────────────
+function calcKellyStake(bankroll, confidence, odds, fraction=0.25) {
+  if(!bankroll || !confidence || !odds || odds<=1) return 0;
+  const p = confidenceToProb(confidence);
+  const b = odds - 1;
+  const q = 1 - p;
+  const kelly = (b * p - q) / b;
+  const quarterKelly = Math.max(0, kelly * fraction);
+  return Math.round(bankroll * Math.min(quarterKelly, 0.02));
+}
+
+function confidenceToProb(confidence) {
+  const x = Math.min(Math.max(confidence, 50), 98) / 100;
+  const exp = -2.2 * x + 1.1;
+  return Math.round((1 / (1 + Math.pow(Math.E, exp))) * 10000) / 10000;
+}
+
+function stakeRating(confidence) {
+  if(confidence >= 85) return { label:"STRONG BET", color:"#69FF47", pct:"1.5-2%" };
+  if(confidence >= 75) return { label:"GOOD BET",   color:"#00E5FF", pct:"1-1.5%" };
+  if(confidence >= 65) return { label:"MODERATE",   color:"#FFD600", pct:"0.5-1%" };
+  return                      { label:"SKIP",        color:"#FF1744", pct:"0%" };
+}
+
 function makeState(starting) {
   return {day:1,AB:parseFloat(starting),SR:0,totalSR:0,streak:0,losses:0,lastWD:0,crossed:[],history:[],tipResults:[]};
 }
@@ -95,7 +119,7 @@ const PRESETS = [
   {id:"beta", label:"BETA", color:"#69FF47",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#69FF47,#00C853)",odds:1.20,wdPct:0.25,emoji:"β"},
   {id:"gamma",label:"GAMMA",color:"#E040FB",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#E040FB,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
 ];
-const TABS = ["TODAY","TIPS","RESULTS","HISTORY","RESERVE","SETTINGS"];
+const TABS = ["TODAY","TIPS","RESULTS","DASHBOARD","HISTORY","RESERVE","SETTINGS"];
 
 // ── Animated counter ─────────────────────────────────────────────
 function useCountUp(target, duration=700) {
@@ -645,12 +669,13 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip}) {
         ))}
       </div>
       <div style={{animation:"fadeUp 0.2s ease"}}>
-        {tab==="TODAY"    && <TodayTab   plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
-        {tab==="TIPS"     && <TipsTab    plan={plan} preset={preset}/>}
-        {tab==="RESULTS"  && <ResultsTab plan={plan} st={st} preset={preset} onLogTip={onLogTip}/>}
-        {tab==="HISTORY"  && <HistTab    plan={plan} st={st} preset={preset}/>}
-        {tab==="RESERVE"  && <SRTab      plan={plan} st={st} preset={preset}/>}
-        {tab==="SETTINGS" && <SetTab     plan={plan} preset={preset} onDelete={onDelete}/>}
+        {tab==="TODAY"     && <TodayTab    plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
+        {tab==="TIPS"      && <TipsTab     plan={plan} preset={preset}/>}
+        {tab==="RESULTS"   && <ResultsTab  plan={plan} st={st} preset={preset} onLogTip={onLogTip}/>}
+        {tab==="DASHBOARD" && <DashboardTab plan={plan} st={st} preset={preset}/>}
+        {tab==="HISTORY"   && <HistTab     plan={plan} st={st} preset={preset}/>}
+        {tab==="RESERVE"   && <SRTab       plan={plan} st={st} preset={preset}/>}
+        {tab==="SETTINGS"  && <SetTab      plan={plan} preset={preset} onDelete={onDelete}/>}
       </div>
     </div>
   );
@@ -690,12 +715,13 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip}) {
         ))}
       </div>
       <div style={{animation:"fadeUp 0.2s ease"}}>
-        {tab==="TODAY"    && <TodayTab   plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
-        {tab==="TIPS"     && <TipsTab    plan={plan} preset={preset}/>}
-        {tab==="RESULTS"  && <ResultsTab plan={plan} st={st} preset={preset}/>}
-        {tab==="HISTORY"  && <HistTab    plan={plan} st={st} preset={preset}/>}
-        {tab==="RESERVE"  && <SRTab      plan={plan} st={st} preset={preset}/>}
-        {tab==="SETTINGS" && <SetTab     plan={plan} preset={preset} onDelete={onDelete}/>}
+        {tab==="TODAY"     && <TodayTab    plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
+        {tab==="TIPS"      && <TipsTab     plan={plan} preset={preset}/>}
+        {tab==="RESULTS"   && <ResultsTab  plan={plan} st={st} preset={preset} onLogTip={onLogTip}/>}
+        {tab==="DASHBOARD" && <DashboardTab plan={plan} st={st} preset={preset}/>}
+        {tab==="HISTORY"   && <HistTab     plan={plan} st={st} preset={preset}/>}
+        {tab==="RESERVE"   && <SRTab       plan={plan} st={st} preset={preset}/>}
+        {tab==="SETTINGS"  && <SetTab      plan={plan} preset={preset} onDelete={onDelete}/>}
       </div>
     </div>
   );
@@ -827,7 +853,339 @@ function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
 }
 
 /* ═══════════════════ HISTORY ═══════════════════════════════ */
-/* ═══════════════════ RESULTS TAB ══════════════════════════ */
+/* ═══════════════════ DASHBOARD TAB ════════════════════════ */
+function DashboardTab({plan, st, preset}) {
+  const results = st.tipResults || [];
+  const history = st.history || [];
+  const bankroll = st.AB + st.SR;
+
+  // ── Performance metrics ─────────────────────────────────────
+  const wins = results.filter(r=>r.result==="WIN");
+  const losses = results.filter(r=>r.result==="LOSS");
+  const totalProfit = results.reduce((s,r)=>s+(r.profitTSH||0), 0);
+  const totalStaked = results.reduce((s,r)=>s+(r.stake||0), 0);
+  const roi = totalStaked>0 ? (totalProfit/totalStaked*100) : 0;
+  const wr  = results.length>0 ? (wins.length/results.length*100) : 0;
+  const avgOdds = wins.length>0
+    ? wins.reduce((s,r)=>s+(r.odds||0),0)/wins.length : 0;
+
+  // ── Win/Loss chart data (last 20 bets) ──────────────────────
+  const last20 = results.slice(-20);
+  const cumulative = last20.reduce((acc, r, i) => {
+    const prev = i===0 ? 0 : acc[i-1];
+    return [...acc, prev + (r.profitTSH||0)];
+  }, []);
+  const chartMax = Math.max(...cumulative, 1);
+  const chartMin = Math.min(...cumulative, 0);
+  const chartRange = chartMax - chartMin || 1;
+
+  // ── Best/Worst market ───────────────────────────────────────
+  const byMarket = {};
+  results.forEach(r=>{
+    const m = (r.market||"Other").split(" ").slice(0,2).join(" ");
+    if(!byMarket[m]) byMarket[m]={p:0,stk:0,w:0,l:0};
+    byMarket[m].p += r.profitTSH||0;
+    byMarket[m].stk += r.stake||0;
+    byMarket[m][r.result==="WIN"?"w":"l"]++;
+  });
+  const marketEntries = Object.entries(byMarket).sort((a,b)=>b[1].p-a[1].p);
+  const bestMarket  = marketEntries[0];
+  const worstMarket = marketEntries[marketEntries.length-1];
+
+  // ── Streak calculations ─────────────────────────────────────
+  let curStreak=0, maxStreak=0, tmp=0;
+  results.forEach(r=>{
+    if(r.result==="WIN"){tmp++;maxStreak=Math.max(maxStreak,tmp);}
+    else tmp=0;
+  });
+  if(results.length>0){
+    let i=results.length-1;
+    const last=results[i].result;
+    while(i>=0 && results[i].result===last){curStreak++;i--;}
+  }
+
+  // ── Smart Staking Calculator ────────────────────────────────
+  const [stakeConf, setStakeConf] = useState(80);
+  const [stakeOdds, setStakeOdds] = useState(1.85);
+  const kellyStake = calcKellyStake(bankroll, stakeConf, stakeOdds);
+  const prob = confidenceToProb(stakeConf);
+  const value = ((prob * stakeOdds) - 1);
+  const rating = stakeRating(stakeConf);
+
+  if(results.length===0) return (
+    <div>
+      {/* Smart Staking Calculator - always shown even with no results */}
+      <div style={{...S.glassCard, border:`1px solid ${preset.color}33`,
+        background:`linear-gradient(135deg,${preset.color}08,transparent)`, marginBottom:12}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
+          color:preset.color,letterSpacing:2,marginBottom:4}}>SMART STAKE CALCULATOR</div>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",
+          marginBottom:16}}>Kelly Criterion · Quarter-Kelly · Max 2% bankroll</div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>
+              AI CONFIDENCE
+            </span>
+            <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
+              color:rating.color}}>{stakeConf}%</span>
+          </div>
+          <input type="range" min="50" max="98" value={stakeConf}
+            onChange={e=>setStakeConf(parseInt(e.target.value))}
+            style={{width:"100%",accentColor:preset.color,cursor:"pointer"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff22"}}>50%</span>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff22"}}>98%</span>
+          </div>
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>
+              BOOKMAKER ODDS
+            </span>
+            <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
+              color:"#FFD600"}}>×{stakeOdds.toFixed(2)}</span>
+          </div>
+          <input type="range" min="110" max="350" value={Math.round(stakeOdds*100)}
+            onChange={e=>setStakeOdds(parseInt(e.target.value)/100)}
+            style={{width:"100%",accentColor:"#FFD600",cursor:"pointer"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff22"}}>1.10</span>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff22"}}>3.50</span>
+          </div>
+        </div>
+
+        {/* Result */}
+        <div style={{background:`${rating.color}12`,border:`1px solid ${rating.color}44`,
+          borderRadius:12,padding:"14px",marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            {[
+              ["RECOMMENDED STAKE", fmt(kellyStake, plan.currency), rating.color],
+              ["USD EQUIV", `$${(kellyStake/TSH_TO_USD).toFixed(2)}`, rating.color],
+              ["TRUE PROBABILITY", `${(prob*100).toFixed(1)}%`, "#00E5FF"],
+              ["EDGE vs BOOKMAKER", `${value>=0?"+":""}${(value*100).toFixed(1)}%`,
+               value>=0?"#69FF47":"#FF1744"],
+            ].map(([l,v,col])=>(
+              <div key={l} style={{background:"#ffffff05",borderRadius:8,padding:"8px 10px"}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",
+                  letterSpacing:1,marginBottom:4}}>{l}</div>
+                <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,
+                  fontSize:11,color:col}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+              color:rating.color,fontWeight:700}}>{rating.label}</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44"}}>
+              Suggested: {rating.pct} of bankroll
+            </div>
+          </div>
+        </div>
+
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",lineHeight:1.6}}>
+          Bankroll used for calc: {fmt(bankroll, plan.currency)}
+        </div>
+      </div>
+
+      <div style={{textAlign:"center",padding:"30px 0",fontFamily:"'DM Mono',monospace",
+        fontSize:10,color:"#ffffff22",lineHeight:2}}>
+        <div style={{fontSize:36,marginBottom:12,opacity:.3}}>📈</div>
+        Log tip results to see your performance charts.<br/>
+        Go to RESULTS tab to start tracking.
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Smart Staking Calculator */}
+      <div style={{...S.glassCard, border:`1px solid ${preset.color}33`,
+        background:`linear-gradient(135deg,${preset.color}08,transparent)`, marginBottom:12}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
+          color:preset.color,letterSpacing:2,marginBottom:4}}>SMART STAKE CALCULATOR</div>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",
+          marginBottom:16}}>Kelly Criterion · Quarter-Kelly · Max 2% bankroll</div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>AI CONFIDENCE</span>
+            <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:rating.color}}>{stakeConf}%</span>
+          </div>
+          <input type="range" min="50" max="98" value={stakeConf}
+            onChange={e=>setStakeConf(parseInt(e.target.value))}
+            style={{width:"100%",accentColor:preset.color,cursor:"pointer"}}/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>BOOKMAKER ODDS</span>
+            <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:"#FFD600"}}>×{stakeOdds.toFixed(2)}</span>
+          </div>
+          <input type="range" min="110" max="350" value={Math.round(stakeOdds*100)}
+            onChange={e=>setStakeOdds(parseInt(e.target.value)/100)}
+            style={{width:"100%",accentColor:"#FFD600",cursor:"pointer"}}/>
+        </div>
+
+        <div style={{background:`${rating.color}12`,border:`1px solid ${rating.color}44`,
+          borderRadius:12,padding:"12px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            {[
+              ["STAKE", fmt(kellyStake,plan.currency), rating.color],
+              ["USD", `$${(kellyStake/TSH_TO_USD).toFixed(2)}`, rating.color],
+              ["PROB", `${(prob*100).toFixed(1)}%`, "#00E5FF"],
+              ["EDGE", `${value>=0?"+":""}${(value*100).toFixed(1)}%`, value>=0?"#69FF47":"#FF1744"],
+            ].map(([l,v,col])=>(
+              <div key={l} style={{background:"#ffffff05",borderRadius:8,padding:"8px 10px"}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:1,marginBottom:3}}>{l}</div>
+                <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:9,color:rating.color}}>
+            {rating.label} · {rating.pct} of bankroll
+          </div>
+        </div>
+      </div>
+
+      {/* Performance Overview */}
+      <div style={{...S.glassCard,marginBottom:10}}>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+          letterSpacing:3,marginBottom:12}}>PERFORMANCE OVERVIEW</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+          {[
+            ["WIN RATE", wr.toFixed(0)+"%", wr>=55?"#69FF47":wr>=45?"#FFD600":"#FF1744"],
+            ["ROI", (roi>=0?"+":"")+roi.toFixed(1)+"%", roi>=0?"#69FF47":"#FF1744"],
+            ["TOTAL P&L", (totalProfit>=0?"+":"")+fmt(totalProfit,plan.currency),
+             totalProfit>=0?"#69FF47":"#FF1744"],
+            ["TOTAL BETS", results.length, preset.color],
+            ["AVG WIN ODDS", avgOdds>0?"×"+avgOdds.toFixed(2):"—", "#FFD600"],
+            ["STAKED", fmt(totalStaked,plan.currency), "#00E5FF"],
+          ].map(([l,v,col])=>(
+            <div key={l} style={{background:"#ffffff05",borderRadius:10,padding:"10px 8px",
+              border:`1px solid ${col}15`,textAlign:"center"}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",
+                letterSpacing:1,marginBottom:4}}>{l}</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:10,color:col}}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* P&L USD */}
+        <div style={{background:totalProfit>=0?"#69FF4710":"#FF174410",borderRadius:8,
+          padding:"8px 12px",border:`1px solid ${totalProfit>=0?"#69FF4733":"#FF174433"}`}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+            color:totalProfit>=0?"#69FF47":"#FF1744"}}>
+            Total P&L in USD: {totalProfit>=0?"+":"-"}${Math.abs(totalProfit/TSH_TO_USD).toFixed(2)}
+          </div>
+        </div>
+      </div>
+
+      {/* Cumulative P&L Chart */}
+      {last20.length > 1 && (
+        <div style={{...S.glassCard,marginBottom:10}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+            letterSpacing:3,marginBottom:12}}>P&L CHART (LAST {last20.length} BETS)</div>
+          <div style={{position:"relative",height:80,marginBottom:8}}>
+            {/* Zero line */}
+            <div style={{position:"absolute",left:0,right:0,
+              top:`${(1-(0-chartMin)/chartRange)*100}%`,
+              height:1,background:"#ffffff15"}}/>
+            {/* Bars */}
+            <div style={{display:"flex",gap:2,height:"100%",alignItems:"flex-end"}}>
+              {last20.map((r,i)=>{
+                const h = Math.abs((r.profitTSH||0)/chartRange)*100;
+                const isWin = r.result==="WIN";
+                return (
+                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",
+                    justifyContent:isWin?"flex-end":"flex-start",height:"100%"}}>
+                    <div style={{
+                      height:`${Math.max(h,4)}%`,
+                      background:isWin?
+                        "linear-gradient(180deg,#69FF47,#00C853)":
+                        "linear-gradient(180deg,#FF1744,#B71C1C)",
+                      borderRadius:2,
+                      boxShadow:isWin?"0 0 6px #69FF4766":"0 0 6px #FF174466",
+                    }}/>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {/* Legend */}
+          <div style={{display:"flex",gap:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{width:8,height:8,borderRadius:2,background:"#69FF47"}}/>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44"}}>Win</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{width:8,height:8,borderRadius:2,background:"#FF1744"}}/>
+              <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44"}}>Loss</span>
+            </div>
+            <div style={{marginLeft:"auto",fontFamily:"'DM Mono',monospace",fontSize:8,
+              color:cumulative[cumulative.length-1]>=0?"#69FF47":"#FF1744"}}>
+              Running: {cumulative[cumulative.length-1]>=0?"+":""}{fmt(cumulative[cumulative.length-1]||0,plan.currency)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Streak info */}
+      <div style={{...S.glassCard,marginBottom:10}}>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+          letterSpacing:3,marginBottom:10}}>STREAKS & RECORDS</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[
+            ["CURRENT STREAK",
+             `${curStreak} ${results.length>0?results[results.length-1].result:""}`,
+             results.length>0&&results[results.length-1].result==="WIN"?"#69FF47":"#FF1744"],
+            ["BEST WIN STREAK", maxStreak+" WINS", "#69FF47"],
+            ["BEST MARKET", bestMarket?bestMarket[0]:"—", "#FFD600"],
+            ["WORST MARKET", worstMarket&&worstMarket!==bestMarket?worstMarket[0]:"—","#FF1744"],
+          ].map(([l,v,col])=>(
+            <div key={l} style={{background:"#ffffff05",borderRadius:10,padding:"10px 12px",
+              border:`1px solid ${col}18`}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",
+                letterSpacing:1,marginBottom:4}}>{l}</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:10,color:col}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ROI by Market chart */}
+      {marketEntries.length > 0 && (
+        <div style={{...S.glassCard,marginBottom:10}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+            letterSpacing:3,marginBottom:10}}>ROI BY MARKET</div>
+          {marketEntries.map(([market,data])=>{
+            const mRoi = data.stk>0?(data.p/data.stk*100):0;
+            const mWr  = (data.w+data.l)>0?(data.w/(data.w+data.l)*100):0;
+            const col  = mRoi>=0?"#69FF47":"#FF1744";
+            const barW = Math.min(Math.abs(mRoi)*2, 100);
+            return (
+              <div key={market} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff77"}}>{market}</span>
+                  <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:9,color:col}}>
+                    {mRoi>=0?"+":""}{mRoi.toFixed(1)}% · {data.w}W {data.l}L
+                  </span>
+                </div>
+                <div style={{height:4,background:"#ffffff08",borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${barW}%`,borderRadius:2,
+                    background:`linear-gradient(90deg,${col}88,${col})`,
+                    boxShadow:`0 0 6px ${col}66`}}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════ RESULTS TAB ════════════════════════════ */
 function ResultsTab({plan, st, preset, onLogTip}) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
