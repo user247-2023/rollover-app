@@ -1420,6 +1420,7 @@ function ResultsTab({plan, st, preset, onLogTip}) {
 }
 
 /* ═══════════════════ HISTORY ═══════════════════════════════ */
+function HistTab({plan,st,preset}) {
   const hist = [...st.history].reverse();
   const wins = st.history.filter(h=>h.result==="WIN").length;
   const wr   = hist.length>0?(wins/hist.length*100).toFixed(1):0;
