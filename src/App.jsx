@@ -682,52 +682,6 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip}) {
     </div>
   );
 }
-  return (
-    <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-        padding:"14px 0",borderBottom:`1px solid ${preset.color}22`,marginBottom:14}}>
-        <button onClick={onBack} style={S.backBtn}>← PLANS</button>
-        <div style={{textAlign:"center"}}>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:18,
-            color:preset.color,letterSpacing:3,textShadow:`0 0 20px ${preset.glow}`}}>
-            {preset.emoji} {preset.label}
-          </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginTop:2}}>
-            DAY {st.day-1} · ×{plan.odds} · {plan.currency}
-          </div>
-        </div>
-        <div style={{padding:"5px 10px",borderRadius:20,fontFamily:"'DM Mono',monospace",
-          fontWeight:700,fontSize:9,letterSpacing:1,
-          background:`${risk.color}15`,color:risk.color,
-          border:`1px solid ${risk.color}44`,boxShadow:`0 0 12px ${risk.color}33`}}>
-          {risk.short}
-        </div>
-      </div>
-      <div style={{display:"flex",gap:4,marginBottom:14,background:"#ffffff05",borderRadius:12,padding:4}}>
-        {TABS.map(t=>(
-          <button key={t} onClick={()=>setTab(t)}
-            style={{flex:1,padding:"8px 4px",borderRadius:8,border:"none",cursor:"pointer",
-              fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:1,transition:"all .25s",
-              background:tab===t?preset.gradient:"transparent",
-              color:tab===t?"#000000cc":preset.color+"55",
-              fontWeight:tab===t?"700":"400",
-              boxShadow:tab===t?`0 0 15px ${preset.glow}`:"none"}}>
-            {t}
-          </button>
-        ))}
-      </div>
-      <div style={{animation:"fadeUp 0.2s ease"}}>
-        {tab==="TODAY"     && <TodayTab    plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
-        {tab==="TIPS"      && <TipsTab     plan={plan} preset={preset}/>}
-        {tab==="RESULTS"   && <ResultsTab  plan={plan} st={st} preset={preset} onLogTip={onLogTip}/>}
-        {tab==="DASHBOARD" && <DashboardTab plan={plan} st={st} preset={preset}/>}
-        {tab==="HISTORY"   && <HistTab     plan={plan} st={st} preset={preset}/>}
-        {tab==="RESERVE"   && <SRTab       plan={plan} st={st} preset={preset}/>}
-        {tab==="SETTINGS"  && <SetTab      plan={plan} preset={preset} onDelete={onDelete}/>}
-      </div>
-    </div>
-  );
-}
 
 /* ═══════════════════ TODAY ═════════════════════════════════ */
 function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
