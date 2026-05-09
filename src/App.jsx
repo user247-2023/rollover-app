@@ -47,8 +47,15 @@ function calcWD(AB, day, lastWD, crossed, wdPct) {
   return {wd, reasons};
 }
 
+const TSH_TO_USD = 2650; // 1 USD ≈ 2650 TSH
+
+function fmtDual(tsh) {
+  const usd = tsh / TSH_TO_USD;
+  return `${fmt(tsh)} (≈ $${usd.toFixed(2)})`;
+}
+
 function makeState(starting) {
-  return {day:1,AB:parseFloat(starting),SR:0,totalSR:0,streak:0,losses:0,lastWD:0,crossed:[],history:[]};
+  return {day:1,AB:parseFloat(starting),SR:0,totalSR:0,streak:0,losses:0,lastWD:0,crossed:[],history:[],tipResults:[]};
 }
 
 // ── Unique device ID ────────────────────────────────────────────
@@ -88,7 +95,7 @@ const PRESETS = [
   {id:"beta", label:"BETA", color:"#69FF47",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#69FF47,#00C853)",odds:1.20,wdPct:0.25,emoji:"β"},
   {id:"gamma",label:"GAMMA",color:"#E040FB",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#E040FB,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
 ];
-const TABS = ["TODAY","TIPS","HISTORY","RESERVE","SETTINGS"];
+const TABS = ["TODAY","TIPS","RESULTS","HISTORY","RESERVE","SETTINGS"];
 
 // ── Animated counter ─────────────────────────────────────────────
 function useCountUp(target, duration=700) {
@@ -216,7 +223,32 @@ export default function App() {
     setAct(id); setTab("TODAY"); setView("plan");
   };
 
-  const logBet = async (result) => {
+  const logTipResult = async (tipData) => {
+    const {plan, state:st} = allPlans[active];
+    const ns = {
+      ...st,
+      tipResults: [...(st.tipResults||[]), {
+        ...tipData,
+        id: Math.random().toString(36).substr(2,8),
+        date: new Date().toISOString().split("T")[0],
+        timestamp: Date.now(),
+        profitTSH: tipData.result === "WIN"
+          ? (tipData.stake * (tipData.odds - 1))
+          : -tipData.stake,
+        profitUSD: tipData.result === "WIN"
+          ? (tipData.stake * (tipData.odds - 1)) / TSH_TO_USD
+          : -tipData.stake / TSH_TO_USD,
+      }]
+    };
+    const updated = {...allPlans, [active]:{plan, state:ns}};
+    await persist(updated);
+    showToast(
+      tipData.result === "WIN"
+        ? `✦ TIP WIN — +${fmt(tipData.stake*(tipData.odds-1))} profit`
+        : `✕ TIP LOSS — -${fmt(tipData.stake)} lost`,
+      tipData.result === "WIN" ? "win" : "loss"
+    );
+  };
     const {plan, state:st} = allPlans[active];
     let ns = {...st, history:[...st.history], crossed:[...st.crossed]};
     const openAB = ns.AB;
@@ -379,7 +411,8 @@ export default function App() {
         <PlanView
           plan={allPlans[active].plan} st={allPlans[active].state}
           preset={preset} tab={tab} setTab={setTab}
-          onBet={logBet} onBack={()=>setView("home")} onDelete={()=>deletePlan(active)}/>
+          onBet={logBet} onBack={()=>setView("home")} onDelete={()=>deletePlan(active)}
+          onLogTip={logTipResult}/>
       )}
     </div>
   );
@@ -451,6 +484,37 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore}) {
           </div>
         </div>
       )}
+
+      {/* Combined Results Summary */}
+      {vals.length>0 && (() => {
+        const allTips = vals.flatMap(({state:st})=>st.tipResults||[]);
+        if(allTips.length===0) return null;
+        const totalProfit = allTips.reduce((s,r)=>s+r.profitTSH,0);
+        const totalStaked = allTips.reduce((s,r)=>s+r.stake,0);
+        const tipWins = allTips.filter(r=>r.result==="WIN").length;
+        const tipRoi = totalStaked>0?(totalProfit/totalStaked*100).toFixed(1):"0";
+        const profitCol = totalProfit>=0?"#69FF47":"#FF1744";
+        return (
+          <div style={{...S.glassCard,border:"1px solid #FFD60033",
+            background:"linear-gradient(135deg,#FFD60008,transparent)",marginBottom:14}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD60088",
+              letterSpacing:3,marginBottom:10}}>TIPS RESULTS SUMMARY</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+              {[
+                ["BETS",allTips.length,"#00E5FF"],
+                ["WINS",tipWins,"#69FF47"],
+                ["ROI",(parseFloat(tipRoi)>=0?"+":"")+tipRoi+"%",profitCol],
+                ["P&L",`${totalProfit>=0?"+":""}$${Math.abs(totalProfit/TSH_TO_USD).toFixed(0)}`,profitCol],
+              ].map(([l,v,col])=>(
+                <div key={l} style={{textAlign:"center"}}>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:1}}>{l}</div>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,color:col,marginTop:3}}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff22",letterSpacing:3,marginBottom:14,paddingLeft:2}}>
         SELECT PLAN
@@ -542,10 +606,55 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore}) {
 }
 
 /* ═══════════════════ PLAN VIEW ═════════════════════════════ */
-function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete}) {
+function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip}) {
   const risk   = riskInfo(st.streak||0, st.AB, st.SR);
   const wdCalc = calcWD(st.AB, st.day, st.lastWD, st.crossed, plan.wdPct);
   const nextWD = 7 - ((st.day-1) % 7);
+  return (
+    <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+        padding:"14px 0",borderBottom:`1px solid ${preset.color}22`,marginBottom:14}}>
+        <button onClick={onBack} style={S.backBtn}>← PLANS</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:18,
+            color:preset.color,letterSpacing:3,textShadow:`0 0 20px ${preset.glow}`}}>
+            {preset.emoji} {preset.label}
+          </div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginTop:2}}>
+            DAY {st.day-1} · ×{plan.odds} · {plan.currency}
+          </div>
+        </div>
+        <div style={{padding:"5px 10px",borderRadius:20,fontFamily:"'DM Mono',monospace",
+          fontWeight:700,fontSize:9,letterSpacing:1,
+          background:`${risk.color}15`,color:risk.color,
+          border:`1px solid ${risk.color}44`,boxShadow:`0 0 12px ${risk.color}33`}}>
+          {risk.short}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:4,marginBottom:14,background:"#ffffff05",borderRadius:12,padding:4}}>
+        {TABS.map(t=>(
+          <button key={t} onClick={()=>setTab(t)}
+            style={{flex:1,padding:"8px 2px",borderRadius:8,border:"none",cursor:"pointer",
+              fontFamily:"'DM Mono',monospace",fontSize:8,letterSpacing:0.5,transition:"all .25s",
+              background:tab===t?preset.gradient:"transparent",
+              color:tab===t?"#000000cc":preset.color+"55",
+              fontWeight:tab===t?"700":"400",
+              boxShadow:tab===t?`0 0 15px ${preset.glow}`:"none"}}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div style={{animation:"fadeUp 0.2s ease"}}>
+        {tab==="TODAY"    && <TodayTab   plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
+        {tab==="TIPS"     && <TipsTab    plan={plan} preset={preset}/>}
+        {tab==="RESULTS"  && <ResultsTab plan={plan} st={st} preset={preset} onLogTip={onLogTip}/>}
+        {tab==="HISTORY"  && <HistTab    plan={plan} st={st} preset={preset}/>}
+        {tab==="RESERVE"  && <SRTab      plan={plan} st={st} preset={preset}/>}
+        {tab==="SETTINGS" && <SetTab     plan={plan} preset={preset} onDelete={onDelete}/>}
+      </div>
+    </div>
+  );
+}
   return (
     <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
@@ -583,6 +692,7 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete}) {
       <div style={{animation:"fadeUp 0.2s ease"}}>
         {tab==="TODAY"    && <TodayTab   plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
         {tab==="TIPS"     && <TipsTab    plan={plan} preset={preset}/>}
+        {tab==="RESULTS"  && <ResultsTab plan={plan} st={st} preset={preset}/>}
         {tab==="HISTORY"  && <HistTab    plan={plan} st={st} preset={preset}/>}
         {tab==="RESERVE"  && <SRTab      plan={plan} st={st} preset={preset}/>}
         {tab==="SETTINGS" && <SetTab     plan={plan} preset={preset} onDelete={onDelete}/>}
@@ -717,7 +827,285 @@ function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
 }
 
 /* ═══════════════════ HISTORY ═══════════════════════════════ */
-function HistTab({plan,st,preset}) {
+/* ═══════════════════ RESULTS TAB ══════════════════════════ */
+function ResultsTab({plan, st, preset, onLogTip}) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    match:"", league:"", market:"", pick:"", odds:"", stake:"", result:"WIN"
+  });
+
+  const results = (st.tipResults||[]).slice().reverse();
+  const wins = results.filter(r=>r.result==="WIN");
+  const losses = results.filter(r=>r.result==="LOSS");
+  const totalProfit = results.reduce((s,r)=>s+r.profitTSH,0);
+  const totalStaked = results.reduce((s,r)=>s+r.stake,0);
+  const roi = totalStaked>0 ? (totalProfit/totalStaked*100).toFixed(1) : "0.0";
+  const wr  = results.length>0 ? (wins.length/results.length*100).toFixed(0) : "0";
+
+  // ROI by market
+  const byMarket = {};
+  results.forEach(r=>{
+    const m = (r.market||"Other").split(" ")[0]+" "+(r.market||"").split(" ")[1]||"Other";
+    if(!byMarket[m]) byMarket[m]={wins:0,losses:0,profit:0,staked:0};
+    byMarket[m][r.result==="WIN"?"wins":"losses"]++;
+    byMarket[m].profit += r.profitTSH;
+    byMarket[m].staked += r.stake;
+  });
+
+  // ROI by league
+  const byLeague = {};
+  results.forEach(r=>{
+    const lg = (r.league||"Other").split("(")[0].trim();
+    if(!byLeague[lg]) byLeague[lg]={wins:0,losses:0,profit:0,staked:0};
+    byLeague[lg][r.result==="WIN"?"wins":"losses"]++;
+    byLeague[lg].profit += r.profitTSH;
+    byLeague[lg].staked += r.stake;
+  });
+
+  const handleLog = () => {
+    if(!form.match||!form.odds||!form.stake) return;
+    onLogTip({
+      match: form.match,
+      league: form.league,
+      market: form.market,
+      pick: form.pick,
+      odds: parseFloat(form.odds),
+      stake: parseFloat(form.stake),
+      result: form.result,
+      currency: plan.currency,
+    });
+    setForm({match:"",league:"",market:"",pick:"",odds:"",stake:"",result:"WIN"});
+    setShowForm(false);
+  };
+
+  return (
+    <div>
+      {/* Summary stats */}
+      <div style={{...S.glassCard, border:`1px solid ${preset.color}33`,
+        background:`linear-gradient(135deg,${preset.color}08,transparent)`, marginBottom:10}}>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color+"88",
+          letterSpacing:3, marginBottom:12}}>TIPS PERFORMANCE TRACKER</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          {[
+            ["TOTAL P&L", `${totalProfit>=0?"+":""}${fmt(totalProfit,plan.currency)}`,
+             totalProfit>=0?"#69FF47":"#FF1744"],
+            ["USD P&L", `${totalProfit>=0?"+":"-"}$${Math.abs(totalProfit/TSH_TO_USD).toFixed(2)}`,
+             totalProfit>=0?"#69FF47":"#FF1744"],
+            ["WIN RATE", wr+"%", parseInt(wr)>=55?"#69FF47":parseInt(wr)>=45?"#FFD600":"#FF1744"],
+            ["ROI", (parseFloat(roi)>=0?"+":"")+roi+"%",
+             parseFloat(roi)>=0?"#69FF47":"#FF1744"],
+            ["TOTAL STAKED", fmt(totalStaked,plan.currency), "#00E5FF"],
+            ["BETS LOGGED", results.length, preset.color],
+          ].map(([l,v,col])=>(
+            <div key={l} style={{background:"#ffffff05",borderRadius:10,padding:"10px 12px",
+              border:`1px solid ${col}18`}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:col+"66",
+                letterSpacing:2,marginBottom:4}}>{l}</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,color:col}}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:12,paddingTop:10,borderTop:"1px solid #ffffff08"}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#69FF4788"}}>
+            ✓ {wins.length} wins
+          </div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#FF174488"}}>
+            ✕ {losses.length} losses
+          </div>
+        </div>
+      </div>
+
+      {/* Log a tip result button */}
+      <button onClick={()=>setShowForm(!showForm)}
+        style={{width:"100%",background:showForm?"#ffffff08":`linear-gradient(135deg,${preset.color}22,${preset.color}11)`,
+          border:`1px solid ${preset.color}44`,borderRadius:12,color:preset.color,
+          fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:11,
+          padding:"12px",cursor:"pointer",letterSpacing:1,marginBottom:10}}>
+        {showForm ? "✕ CANCEL" : "+ LOG TIP RESULT"}
+      </button>
+
+      {/* Log form */}
+      {showForm && (
+        <div style={{...S.glassCard,marginBottom:10,border:`1px solid ${preset.color}33`}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+            letterSpacing:2,marginBottom:12}}>LOG A TIP RESULT</div>
+          {[
+            {k:"match",  label:"MATCH",  ph:"e.g. Arsenal vs Chelsea"},
+            {k:"league", label:"LEAGUE", ph:"e.g. Premier League"},
+            {k:"market", label:"MARKET", ph:"e.g. Over 2.5 Goals"},
+            {k:"pick",   label:"PICK",   ph:"e.g. Over 2.5"},
+            {k:"odds",   label:"ODDS",   ph:"e.g. 1.85",  type:"number"},
+            {k:"stake",  label:"STAKE ("+plan.currency+")", ph:"e.g. 5000", type:"number"},
+          ].map(({k,label,ph,type="text"})=>(
+            <div key={k} style={{marginBottom:8}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",
+                letterSpacing:1,marginBottom:4}}>{label}</div>
+              <input type={type} placeholder={ph} value={form[k]}
+                onChange={e=>setForm({...form,[k]:e.target.value})}
+                style={{...S.input,border:`1px solid ${preset.color}33`,padding:"10px 12px",fontSize:12}}/>
+            </div>
+          ))}
+          {/* Result toggle */}
+          <div style={{marginBottom:12}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",
+              letterSpacing:1,marginBottom:8}}>RESULT</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {["WIN","LOSS"].map(r=>(
+                <button key={r} onClick={()=>setForm({...form,result:r})}
+                  style={{padding:"10px",borderRadius:10,border:"none",cursor:"pointer",
+                    fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,
+                    background: form.result===r
+                      ? (r==="WIN"?"linear-gradient(135deg,#69FF47,#00C853)":"linear-gradient(135deg,#FF1744,#B71C1C)")
+                      : "#ffffff08",
+                    color: form.result===r ? (r==="WIN"?"#001a00":"#fff") : "#ffffff44",
+                  }}>
+                  {r==="WIN"?"✦ WIN":"✕ LOSS"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Preview profit */}
+          {form.odds && form.stake && (
+            <div style={{background:form.result==="WIN"?"#69FF4710":"#FF174410",
+              borderRadius:8,padding:"8px 12px",marginBottom:12,
+              border:`1px solid ${form.result==="WIN"?"#69FF4733":"#FF174433"}`}}>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+                color:form.result==="WIN"?"#69FF47":"#FF1744"}}>
+                {form.result==="WIN"
+                  ? `Profit: +${fmt(parseFloat(form.stake)*(parseFloat(form.odds)-1),plan.currency)} (+$${(parseFloat(form.stake)*(parseFloat(form.odds)-1)/TSH_TO_USD).toFixed(2)})`
+                  : `Loss: -${fmt(parseFloat(form.stake),plan.currency)} (-$${(parseFloat(form.stake)/TSH_TO_USD).toFixed(2)})`
+                }
+              </div>
+            </div>
+          )}
+          <button onClick={handleLog}
+            style={{width:"100%",background:preset.gradient,border:"none",borderRadius:10,
+              color:"#000",fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
+              padding:"12px",cursor:"pointer",boxShadow:`0 0 20px ${preset.glow}`}}>
+            SAVE RESULT
+          </button>
+        </div>
+      )}
+
+      {/* ROI by Market */}
+      {Object.keys(byMarket).length > 0 && (
+        <div style={{...S.glassCard,marginBottom:10}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+            letterSpacing:2,marginBottom:10}}>ROI BY MARKET</div>
+          {Object.entries(byMarket)
+            .sort((a,b)=>b[1].profit-a[1].profit)
+            .map(([market,data])=>{
+              const mRoi = data.staked>0?(data.profit/data.staked*100).toFixed(1):"0";
+              const col = parseFloat(mRoi)>=0?"#69FF47":"#FF1744";
+              return (
+                <div key={market} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"8px 0",borderBottom:"1px solid #ffffff06"}}>
+                  <div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff77"}}>{market}</div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginTop:2}}>
+                      {data.wins}W {data.losses}L
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col}}>
+                      {parseFloat(mRoi)>=0?"+":""}{mRoi}%
+                    </div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"88",marginTop:2}}>
+                      {fmt(data.profit,plan.currency)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
+      {/* ROI by League */}
+      {Object.keys(byLeague).length > 0 && (
+        <div style={{...S.glassCard,marginBottom:10}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+            letterSpacing:2,marginBottom:10}}>ROI BY LEAGUE</div>
+          {Object.entries(byLeague)
+            .sort((a,b)=>b[1].profit-a[1].profit)
+            .slice(0,8)
+            .map(([league,data])=>{
+              const lRoi = data.staked>0?(data.profit/data.staked*100).toFixed(1):"0";
+              const col = parseFloat(lRoi)>=0?"#69FF47":"#FF1744";
+              return (
+                <div key={league} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"8px 0",borderBottom:"1px solid #ffffff06"}}>
+                  <div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff77"}}>{league}</div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginTop:2}}>
+                      {data.wins}W {data.losses}L
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col}}>
+                      {parseFloat(lRoi)>=0?"+":""}{lRoi}%
+                    </div>
+                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"88",marginTop:2}}>
+                      {fmt(data.profit,plan.currency)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
+      {/* Recent results list */}
+      {results.length===0 ? (
+        <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'DM Mono',monospace",
+          fontSize:10,color:"#ffffff22",lineHeight:2}}>
+          <div style={{fontSize:36,marginBottom:12,opacity:.3}}>📊</div>
+          No tip results logged yet.<br/>
+          Tap "+ LOG TIP RESULT" after each bet.
+        </div>
+      ) : (
+        <div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",
+            letterSpacing:2,marginBottom:10}}>RECENT RESULTS</div>
+          {results.slice(0,20).map((r,i)=>(
+            <div key={r.id||i} style={{...S.glassCard,marginBottom:8,padding:"12px 14px",
+              borderLeft:`2px solid ${r.result==="WIN"?"#69FF47":"#FF1744"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{flex:1,paddingRight:8}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
+                    color:"#ffffff",marginBottom:3}}>{r.match}</div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginBottom:4}}>
+                    {r.league} · {r.market}
+                  </div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>
+                    {r.pick} @ {r.odds} · Stake: {fmt(r.stake,plan.currency)}
+                  </div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:14,
+                    color:r.result==="WIN"?"#69FF47":"#FF1744",marginBottom:4}}>
+                    {r.result==="WIN"?"✦ WIN":"✕ LOSS"}
+                  </div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
+                    color:r.result==="WIN"?"#69FF47":"#FF1744"}}>
+                    {r.profitTSH>=0?"+":""}{fmt(r.profitTSH,plan.currency)}
+                  </div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                    color:r.result==="WIN"?"#69FF4788":"#FF174488"}}>
+                    {r.profitTSH>=0?"+":"-"}${Math.abs(r.profitUSD).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",
+                marginTop:6}}>{r.date}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════ HISTORY ═══════════════════════════════ */
   const hist = [...st.history].reverse();
   const wins = st.history.filter(h=>h.result==="WIN").length;
   const wr   = hist.length>0?(wins/hist.length*100).toFixed(1):0;
