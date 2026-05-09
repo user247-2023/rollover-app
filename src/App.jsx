@@ -672,7 +672,7 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip}) {
       </div>
       <div style={{animation:"fadeUp 0.2s ease"}}>
         {tab==="TODAY"     && <TodayTab    plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
-        {tab==="TIPS"      && <TipsTab     plan={plan} preset={preset}/>}
+        {tab==="TIPS"      && <TipsTab     plan={plan} st={st} preset={preset}/>}
         {tab==="RESULTS"   && <ResultsTab  plan={plan} st={st} preset={preset} onLogTip={onLogTip}/>}
         {tab==="DASHBOARD" && <DashboardTab plan={plan} st={st} preset={preset}/>}
         {tab==="HISTORY"   && <HistTab     plan={plan} st={st} preset={preset}/>}
@@ -1634,7 +1634,8 @@ function marketColor(market) {
   return key ? MARKET_COLORS[key] : "#00E5FF";
 }
 
-function TipsTab({ plan, preset }) {
+function TipsTab({ plan, st, preset }) {
+  const bankroll = st ? (st.AB + st.SR) : 0;
   const [tips,     setTips]     = useState([]);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
@@ -1937,10 +1938,28 @@ function TipsTab({ plan, preset }) {
                 )}
               </div>
 
-              {/* Market tag */}
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
-                color:"#ffffff44",marginBottom:8}}>
-                📊 {tip.market}
+              {/* Market tag + Smart Stake */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44"}}>
+                  📊 {tip.market}
+                </div>
+                {bankroll > 0 && (() => {
+                  const odds = tip.bookmaker_odds || parseFloat((tip.odds_range||"1.85").split("-")[0]) || 1.85;
+                  const stake = calcKellyStake(bankroll, conf, odds);
+                  const rating = stakeRating(conf);
+                  if(stake <= 0) return null;
+                  return (
+                    <div style={{
+                      background:`${rating.color}18`,
+                      border:`1px solid ${rating.color}44`,
+                      borderRadius:20, padding:"3px 10px",
+                      fontFamily:"'DM Mono',monospace", fontSize:8,
+                      color:rating.color, letterSpacing:1,
+                    }}>
+                      💰 {fmt(stake, plan.currency)}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Confidence bar */}
@@ -2008,6 +2027,40 @@ function TipsTab({ plan, preset }) {
                       </div>
                     </div>
                   )}
+
+                  {/* Smart Stake Card */}
+                  {bankroll > 0 && (() => {
+                    const odds = tip.bookmaker_odds || parseFloat((tip.odds_range||"1.85").split("-")[0]) || 1.85;
+                    const stake = calcKellyStake(bankroll, conf, odds);
+                    const prob = confidenceToProb(conf);
+                    const val = (prob * odds) - 1;
+                    const rating = stakeRating(conf);
+                    return (
+                      <div style={{marginTop:10,background:`${rating.color}10`,
+                        border:`1px solid ${rating.color}33`,borderRadius:8,padding:"10px 12px"}}>
+                        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                          color:rating.color,letterSpacing:2,marginBottom:8}}>
+                          SMART STAKE (KELLY CRITERION)
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:6}}>
+                          {[
+                            ["STAKE", fmt(stake,plan.currency), rating.color],
+                            ["USD", `$${(stake/TSH_TO_USD).toFixed(2)}`, rating.color],
+                            ["EDGE", `${val>=0?"+":""}${(val*100).toFixed(1)}%`, val>=0?"#69FF47":"#FF1744"],
+                          ].map(([l,v,c])=>(
+                            <div key={l} style={{background:"#ffffff06",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
+                              <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:1,marginBottom:3}}>{l}</div>
+                              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:10,color:c}}>{v}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                          color:rating.color,fontWeight:700}}>
+                          {rating.label} · {rating.pct} of {fmt(bankroll,plan.currency)} bankroll
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* AI Sources */}
                   {tip.ais && tip.ais.length > 0 && (
