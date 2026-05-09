@@ -1205,10 +1205,31 @@ function TipsTab({ plan, preset }) {
                   color:rCol,letterSpacing:1}}>
                   {tip.risk} RISK
                 </div>
-                {tip.odds_range&&(
-                  <div style={{background:"#ffffff08",borderRadius:20,padding:"4px 10px",
-                    fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff55",letterSpacing:1}}>
-                    ~{tip.odds_range} odds
+                {/* Odds display - real or estimated */}
+                {(tip.bookmaker_odds || tip.odds_range) && (
+                  <div style={{
+                    background: tip.real_odds_available ? "#69FF4720" : "#ffffff08",
+                    border: tip.real_odds_available ? "1px solid #69FF4766" : "1px solid #ffffff22",
+                    borderRadius:20, padding:"4px 10px",
+                    fontFamily:"'DM Mono',monospace", fontSize:8,
+                    color: tip.real_odds_available ? "#69FF47" : "#ffffff55",
+                    letterSpacing:1
+                  }}>
+                    {tip.real_odds_available
+                      ? `✓ ${tip.bookmaker_odds} (Live)`
+                      : `~${tip.odds_range}`}
+                  </div>
+                )}
+
+                {/* Value badge - only when real odds available */}
+                {tip.is_value_bet && tip.edge_pct && (
+                  <div style={{
+                    background:"#FFD60020", border:"1px solid #FFD60066",
+                    borderRadius:20, padding:"4px 10px",
+                    fontFamily:"'DM Mono',monospace", fontSize:8,
+                    color:"#FFD600", letterSpacing:1, fontWeight:700,
+                  }}>
+                    ⚡ {tip.edge_pct} EDGE
                   </div>
                 )}
               </div>
@@ -1259,6 +1280,32 @@ function TipsTab({ plan, preset }) {
                     </div>
                   )}
 
+                  {/* Value Analysis - shown when real odds available */}
+                  {tip.real_odds_available && (
+                    <div style={{marginTop:10,background:"#FFD60008",borderRadius:8,
+                      padding:"10px 12px",border:"1px solid #FFD60033"}}>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                        color:"#FFD60088",letterSpacing:2,marginBottom:8}}>VALUE ANALYSIS</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        {[
+                          ["REAL ODDS", tip.bookmaker_odds, "#69FF47"],
+                          ["OUR PROB", tip.predicted_probability ? `${(tip.predicted_probability*100).toFixed(0)}%` : "N/A", "#00E5FF"],
+                          ["EDGE", tip.edge_pct || "N/A", tip.is_value_bet ? "#FFD600" : "#FF1744"],
+                          ["STAKE", tip.recommended_stake_pct ? `${tip.recommended_stake_pct}% bankroll` : "Standard", "#E040FB"],
+                        ].map(([l,v,c])=>(
+                          <div key={l} style={{background:"#ffffff04",borderRadius:6,padding:"6px 8px"}}>
+                            <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:2}}>{l}</div>
+                            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:c,marginTop:2}}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                        color:"#ffffff33",marginTop:8}}>
+                        Source: {tip.odds_source || "The Odds API"}
+                      </div>
+                    </div>
+                  )}
+
                   {/* AI Sources */}
                   {tip.ais && tip.ais.length > 0 && (
                     <div style={{marginTop:10,background:"#ffffff04",borderRadius:8,padding:"8px 10px",border:"1px solid #ffffff08"}}>
@@ -1283,13 +1330,13 @@ function TipsTab({ plan, preset }) {
                     <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
                       color:"#ffffff33",letterSpacing:2,marginBottom:4}}>PLAN MATCH</div>
                     <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55",lineHeight:1.6}}>
-                      {tip.odds_range?.includes("1.10") || tip.odds_range?.includes("1.1")
-                        ? "✦ Fits Plan ALPHA (×1.10)"
-                        : tip.odds_range?.includes("1.20") || tip.odds_range?.includes("1.2")
-                        ? "✦ Fits Plan BETA (×1.20)"
-                        : tip.odds_range?.includes("1.5")
-                        ? "✦ Fits Plan GAMMA (×1.50)"
-                        : "✦ Check odds with your bookmaker"}
+                      {(() => {
+                        const o = tip.bookmaker_odds || parseFloat((tip.odds_range||"").split("-")[0]);
+                        if(o >= 1.05 && o <= 1.15) return "✦ Fits Plan ALPHA (×1.10)";
+                        if(o >= 1.15 && o <= 1.25) return "✦ Fits Plan BETA (×1.20)";
+                        if(o >= 1.40 && o <= 1.60) return "✦ Fits Plan GAMMA (×1.50)";
+                        return "✦ Check odds with your bookmaker";
+                      })()}
                     </div>
                   </div>
                 </div>
