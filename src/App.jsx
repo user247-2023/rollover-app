@@ -1221,8 +1221,8 @@ function TipsTab({ plan, preset }) {
                   </div>
                 )}
 
-                {/* Value badge - only when real odds available */}
-                {tip.is_value_bet && tip.edge_pct && (
+                {/* Value badge - only when real odds confirmed */}
+                {tip.real_odds_available && tip.is_value_bet && tip.edge_pct && (
                   <div style={{
                     background:"#FFD60020", border:"1px solid #FFD60066",
                     borderRadius:20, padding:"4px 10px",
