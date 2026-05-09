@@ -273,6 +273,8 @@ export default function App() {
       tipData.result === "WIN" ? "win" : "loss"
     );
   };
+
+  const logBet = async (result) => {
     const {plan, state:st} = allPlans[active];
     let ns = {...st, history:[...st.history], crossed:[...st.crossed]};
     const openAB = ns.AB;
