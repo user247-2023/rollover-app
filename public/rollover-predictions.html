@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Rollover — Match Read</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ------------------------------------------------------------------ *
+   *  CONFIG — your live backend. Change this one line if the URL moves. *
+   * ------------------------------------------------------------------ */
+  /* (used by the script below; kept here so it's easy to find)          */
+
+  :root{
+    --ink:#0b121f;
+    --panel:#131e34;
+    --panel-2:#1a2742;
+    --line:rgba(255,255,255,.08);
+    --line-strong:rgba(255,255,255,.16);
+    --text:#eef2f8;
+    --muted:#97a3ba;
+    --gold:#f2b53d;
+    --gold-soft:rgba(242,181,61,.14);
+    --green:#33d399;
+    --green-soft:rgba(51,211,153,.14);
+    --red:#f0556e;
+    --red-soft:rgba(240,85,110,.14);
+    --slate:#74809a;
+    --radius:16px;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(242,181,61,.07), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(51,211,153,.06), transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:"Inter",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    line-height:1.5;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:28px 18px 80px}
+
+  /* header */
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:26px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .crest{width:40px;height:40px;border-radius:11px;background:linear-gradient(150deg,var(--gold),#c98a1e);
+    display:grid;place-items:center;font-family:"Space Grotesk";font-weight:700;color:#241a05;font-size:20px;
+    box-shadow:0 6px 18px rgba(242,181,61,.25)}
+  .brand h1{font-family:"Space Grotesk";font-weight:600;font-size:19px;margin:0;letter-spacing:.2px}
+  .brand p{margin:0;color:var(--muted);font-size:12.5px}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border:1px solid var(--line);
+    border-radius:999px;font-size:12.5px;color:var(--muted);background:rgba(255,255,255,.02)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--slate)}
+  .pill.ok .dot{background:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+  .pill.bad .dot{background:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+
+  /* cards */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px}
+  .card + .card{margin-top:18px}
+  .eyebrow{font-family:"Space Grotesk";font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
+
+  /* match picker */
+  .picker{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:end}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px}
+  select,input{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    border-radius:11px;padding:12px 13px;font-size:15px;font-family:inherit;appearance:none}
+  select:focus,input:focus,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .vs{font-family:"Space Grotesk";font-weight:700;color:var(--muted);padding-bottom:11px}
+  .btn{margin-top:16px;width:100%;border:none;border-radius:12px;padding:14px;font-size:15.5px;font-weight:600;
+    font-family:"Space Grotesk";cursor:pointer;background:linear-gradient(150deg,var(--gold),#d99a26);color:#241a05;
+    transition:transform .08s ease, filter .15s ease}
+  .btn:hover{filter:brightness(1.05)} .btn:active{transform:translateY(1px)}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line-strong)}
+  .btn[disabled]{opacity:.55;cursor:default}
+
+  /* result */
+  #result{margin-top:18px}
+  .hidden{display:none!important}
+  .matchhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+  .matchhead .teams{font-family:"Space Grotesk";font-weight:600;font-size:18px}
+  .matchhead .xg{font-family:var(--mono);color:var(--muted);font-size:13.5px}
+
+  /* 1x2 segmented bar — the signature element */
+  .bar{display:flex;height:46px;border-radius:11px;overflow:hidden;margin:16px 0 8px;border:1px solid var(--line)}
+  .seg{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;color:#0b121f;font-weight:700;
+    font-family:"Space Grotesk";transition:flex-grow .5s ease}
+  .seg small{font-weight:600;font-size:10.5px;opacity:.8;font-family:"Inter"}
+  .seg.h{background:var(--green)} .seg.d{background:var(--slate)} .seg.a{background:var(--red)}
+  .barkey{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+  .tile{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:13px}
+  .tile .k{font-size:11.5px;color:var(--muted);margin-bottom:6px}
+  .tile .v{font-family:"Space Grotesk";font-weight:600;font-size:20px}
+  .tile .v small{font-size:12px;color:var(--muted);font-weight:500}
+
+  /* scoreline tiles */
+  .scores{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
+  .score{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:10px 13px;text-align:center;flex:1;min-width:74px}
+  .score .ln{font-family:var(--mono);font-size:17px;font-weight:600}
+  .score .pc{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .score.top{border-color:var(--gold);background:var(--gold-soft)}
+
+  /* value section */
+  .oddsgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .oddsgrid .field label{font-size:12px}
+  .oddsblock{margin-bottom:14px}
+  .oddsblock h4{font-family:"Space Grotesk";font-weight:600;font-size:13.5px;margin:0 0 9px;color:var(--text)}
+  .hint{color:var(--muted);font-size:13px;margin:2px 0 16px}
+  .bankrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;margin-top:4px}
+
+  .vbet{border:1px solid var(--line);border-radius:13px;padding:15px;margin-top:12px;background:var(--panel-2)}
+  .vbet.is-value{border-color:var(--green);background:linear-gradient(180deg,var(--green-soft),transparent)}
+  .vbet-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .vbet .name{font-family:"Space Grotesk";font-weight:600;font-size:16px}
+  .vbet .edge{font-family:"Space Grotesk";font-weight:700;font-size:18px}
+  .edge.pos{color:var(--green)} .edge.neg{color:var(--muted)}
+  .vmeta{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+  .vmeta b{color:var(--text);font-family:var(--mono);font-weight:600}
+  .badge{font-size:11px;font-weight:700;font-family:"Space Grotesk";padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em}
+  .badge.low{background:var(--green-soft);color:var(--green)}
+  .badge.medium{background:var(--gold-soft);color:var(--gold)}
+  .badge.high{background:var(--red-soft);color:var(--red)}
+
+  .empty{text-align:center;padding:26px 16px;color:var(--muted)}
+  .empty .big{font-family:"Space Grotesk";font-size:16px;color:var(--text);margin-bottom:6px}
+  .notice{border-radius:12px;padding:14px;font-size:13.5px;border:1px solid var(--line)}
+  .notice.warn{background:var(--red-soft);border-color:rgba(240,85,110,.4)}
+  .notice.warn b{color:var(--red)}
+  .spinner{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:var(--text);
+    border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .fade{animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px}
+  .toggle{background:none;border:none;color:var(--gold);font-size:13px;cursor:pointer;font-family:inherit;padding:8px 0;margin-top:6px}
+
+  @media (max-width:620px){
+    .picker{grid-template-columns:1fr;gap:10px}
+    .vs{display:none}
+    .oddsgrid{grid-template-columns:1fr 1fr}
+    .tiles{grid-template-columns:1fr 1fr}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="crest">R</div>
+      <div>
+        <h1>Rollover — Match Read</h1>
+        <p>Model-driven match analysis &amp; value check</p>
+      </div>
+    </div>
+    <div id="statusPill" class="pill"><span class="dot"></span><span id="statusText">checking…</span></div>
+  </header>
+
+  <!-- MATCH PICKER -->
+  <section class="card">
+    <p class="eyebrow">Pick a match</p>
+    <div class="picker">
+      <div class="field">
+        <label for="home">Home team</label>
+        <select id="home"></select>
+      </div>
+      <div class="vs">vs</div>
+      <div class="field">
+        <label for="away">Away team</label>
+        <select id="away"></select>
+      </div>
+    </div>
+    <button class="btn" id="readBtn">Read the match</button>
+  </section>
+
+  <!-- RESULT -->
+  <section id="result" class="hidden"></section>
+
+</div>
+
+<footer>
+  Estimates for analysis only · bet responsibly · 18+
+</footer>
+
+<script>
+/* ===== CONFIG ============================================================ */
+const API = "https://web-production-6371a.up.railway.app";   // <-- your backend
+/* ========================================================================= */
+
+const $ = (s)=>document.querySelector(s);
+const homeSel=$("#home"), awaySel=$("#away"), readBtn=$("#readBtn"), result=$("#result");
+
+const pct = (x)=> (x*100).toFixed(0)+"%";
+const pct1= (x)=> (x*100).toFixed(1)+"%";
+const esc = (s)=> String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shortName = (n)=> n.replace(/\s+FC$/,"").replace(/\s+(AFC|CF)$/,"");
+
+/* ---- status + team list ---- */
+async function init(){
+  try{
+    const r = await fetch(`${API}/api/goals/ratings`);
+    if(!r.ok) throw new Error("notready");
+    const data = await r.json();
+    const teams = data.ratings.map(t=>t.team).sort((a,b)=>a.localeCompare(b));
+    for(const sel of [homeSel,awaySel]){
+      sel.innerHTML = teams.map(t=>`<option value="${esc(t)}">${esc(shortName(t))}</option>`).join("");
+    }
+    // sensible default matchup if present
+    pick(homeSel,"Manchester City FC"); pick(awaySel,"Manchester United FC");
+    setStatus(true, `Model ready · ${data.n_teams} teams`);
+  }catch(e){
+    setStatus(false,"Model not switched on");
+    result.classList.remove("hidden");
+    result.innerHTML = `<div class="card"><div class="notice warn">
+      <b>The model isn't switched on yet.</b><br>
+      Open your Railway <b>Console</b> and run the one-line fit command, then refresh this page.
+      (Ask Claude to add auto-start and you'll never need to do this again.)
+    </div></div>`;
+  }
+}
+function pick(sel,val){ const o=[...sel.options].find(o=>o.value===val); if(o) sel.value=val; }
+function setStatus(ok,text){
+  const p=$("#statusPill"); p.classList.toggle("ok",ok); p.classList.toggle("bad",!ok);
+  $("#statusText").textContent=text;
+}
+
+/* ---- read the match ---- */
+readBtn.addEventListener("click", async ()=>{
+  const home=homeSel.value, away=awaySel.value;
+  if(home===away){ flash("Pick two different teams."); return; }
+  readBtn.disabled=true; readBtn.innerHTML=`<span class="spinner"></span>Reading…`;
+  try{
+    const r = await fetch(`${API}/api/goals/predict?home_team=${encodeURIComponent(home)}&away_team=${encodeURIComponent(away)}`);
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||"Could not read this match."); }
+    render(await r.json(), home, away);
+  }catch(e){
+    result.classList.remove("hidden");
+    result.innerHTML = `<div class="card"><div class="notice warn"><b>Couldn't read that match.</b><br>${esc(e.message)}</div></div>`;
+  }finally{
+    readBtn.disabled=false; readBtn.textContent="Read the match";
+  }
+});
+
+function render(m, home, away){
+  const h=m["1x2"].home, d=m["1x2"].draw, a=m["1x2"].away;
+  const eg=m.expected_goals;
+  const ou=m.over_under, btts=m.btts;
+  const scores=m.correct_score||[];
+  const topProb = scores.length?scores[0].prob:0;
+
+  result.classList.remove("hidden");
+  result.classList.add("fade");
+  result.innerHTML = `
+    <div class="card">
+      <div class="matchhead">
+        <div class="teams">${esc(shortName(home))} <span style="color:var(--muted)">vs</span> ${esc(shortName(away))}</div>
+        <div class="xg">xG ${eg.home.toFixed(2)} – ${eg.away.toFixed(2)}</div>
+      </div>
+
+      <div class="bar" role="img" aria-label="Win probabilities">
+        <div class="seg h" style="flex-grow:${h}">${pct(h)}<small>Home</small></div>
+        <div class="seg d" style="flex-grow:${d}">${pct(d)}<small>Draw</small></div>
+        <div class="seg a" style="flex-grow:${a}">${pct(a)}<small>Away</small></div>
+      </div>
+      <div class="barkey"><span>${esc(shortName(home))} win</span><span>Draw</span><span>${esc(shortName(away))} win</span></div>
+
+      <div class="tiles">
+        <div class="tile"><div class="k">Over 2.5 goals</div><div class="v">${pct(ou["2.5"].over)} <small>/ Under ${pct(ou["2.5"].under)}</small></div></div>
+        <div class="tile"><div class="k">Both teams score</div><div class="v">${pct(btts.yes)} <small>yes</small></div></div>
+        <div class="tile"><div class="k">Over 1.5 goals</div><div class="v">${pct(ou["1.5"].over)}</div></div>
+      </div>
+
+      <div class="scores">
+        ${scores.map((s,i)=>`<div class="score ${i===0?'top':''}">
+            <div class="ln">${s.home}–${s.away}</div><div class="pc">${pct1(s.prob)}</div></div>`).join("")}
+      </div>
+    </div>
+
+    ${valueSectionHTML(home,away)}
+  `;
+  wireValue(home,away);
+}
+
+/* ---- value section ---- */
+function valueSectionHTML(home,away){
+  return `
+  <div class="card">
+    <p class="eyebrow">Check the odds for value</p>
+    <p class="hint">Type in the decimal odds your bookmaker is showing for this match. We strip out the
+      bookmaker's margin, compare what's left to the model, and flag any bet priced in your favour.</p>
+
+    <div class="oddsblock">
+      <h4>Match result (1X2)</h4>
+      <div class="oddsgrid">
+        <div class="field"><label>Home win</label><input inputmode="decimal" id="o_h" placeholder="e.g. 1.85"></div>
+        <div class="field"><label>Draw</label><input inputmode="decimal" id="o_d" placeholder="e.g. 3.60"></div>
+        <div class="field"><label>Away win</label><input inputmode="decimal" id="o_a" placeholder="e.g. 4.20"></div>
+      </div>
+    </div>
+
+    <div class="oddsblock">
+      <h4>Goals &amp; both teams to score</h4>
+      <div class="oddsgrid">
+        <div class="field"><label>Over 2.5</label><input inputmode="decimal" id="o_ov" placeholder="e.g. 1.90"></div>
+        <div class="field"><label>Under 2.5</label><input inputmode="decimal" id="o_un" placeholder="e.g. 1.95"></div>
+        <div class="field"><label>BTTS — Yes / No</label>
+          <div style="display:flex;gap:8px">
+            <input inputmode="decimal" id="o_by" placeholder="Yes 1.95">
+            <input inputmode="decimal" id="o_bn" placeholder="No 1.80">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bankrow">
+      <div class="field"><label>Your bankroll (optional, TSh)</label><input inputmode="numeric" id="bankroll" placeholder="e.g. 100000"></div>
+      <button class="btn" id="valueBtn" style="margin-top:0">Check for value</button>
+    </div>
+
+    <div id="valueOut"></div>
+  </div>`;
+}
+
+function num(id){ const v=parseFloat($("#"+id).value); return isFinite(v)&&v>1 ? v : null; }
+
+function wireValue(home,away){
+  $("#valueBtn").addEventListener("click", async ()=>{
+    const odds={};
+    const h=num("o_h"),d=num("o_d"),a=num("o_a");
+    if(h&&d&&a) odds["1x2"]=[h,d,a];
+    const ov=num("o_ov"),un=num("o_un");
+    if(ov&&un) odds["ou_2_5"]=[ov,un];
+    const by=num("o_by"),bn=num("o_bn");
+    if(by&&bn) odds["btts"]=[by,bn];
+
+    const out=$("#valueOut");
+    if(Object.keys(odds).length===0){
+      out.innerHTML=`<div class="empty"><div class="big">Add some odds first</div>
+        Fill in at least one full market — both sides (e.g. Over <i>and</i> Under) so we can remove the margin.</div>`;
+      return;
+    }
+    const bank=parseFloat($("#bankroll").value);
+    const body={home_team:home, away_team:away, odds_by_market:odds};
+    if(isFinite(bank)&&bank>0) body.bankroll=bank;
+
+    const btn=$("#valueBtn"); btn.disabled=true; btn.innerHTML=`<span class="spinner"></span>Checking…`;
+    try{
+      const r=await fetch(`${API}/api/goals/value`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.detail||"Couldn't check value."); }
+      renderValue(await r.json(), out);
+    }catch(e){
+      out.innerHTML=`<div class="notice warn"><b>Couldn't check value.</b><br>${esc(e.message)}</div>`;
+    }finally{
+      btn.disabled=false; btn.textContent="Check for value";
+    }
+  });
+}
+
+function betCard(b, withStake){
+  const eClass = b.edge>0 ? "pos":"neg";
+  const stake = withStake && b.stake_amount!=null
+      ? `<span><b>TSh ${Number(b.stake_amount).toLocaleString()}</b> stake</span>`
+      : `<span><b>${pct1(b.stake_fraction)}</b> of bankroll</span>`;
+  return `<div class="vbet ${b.is_value?'is-value':''}">
+    <div class="vbet-top">
+      <div class="name">${esc(b.label)}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="edge ${eClass}">${b.edge_pct>0?'+':''}${b.edge_pct}%</span>
+        ${b.is_value?`<span class="badge ${b.risk_tier}">${b.risk_tier} risk</span>`:''}
+      </div>
+    </div>
+    <div class="vmeta">
+      <span>Model <b>${pct1(b.model_prob)}</b></span>
+      <span>Fair odds <b>${(1/b.market_fair_prob).toFixed(2)}</b></span>
+      <span>Your odds <b>${b.best_odds}</b></span>
+      ${b.is_value?stake:""}
+    </div>
+  </div>`;
+}
+
+function renderValue(res, out){
+  const value=res.value_bets||[], all=res.all_selections||[];
+  const withStake = value.some(b=>b.stake_amount!=null);
+  let html="";
+  if(value.length){
+    html += `<div style="margin-top:6px">${value.map(b=>betCard(b,withStake)).join("")}</div>`;
+  }else{
+    html += `<div class="empty"><div class="big">No value at these odds</div>
+      The bookmaker's prices are fair or better than the model here. Try different odds, or another match.</div>`;
+  }
+  // always let them see the full comparison
+  html += `<button class="toggle" id="showAll">Show all ${all.length} comparisons ▾</button>
+           <div id="allBox" class="hidden" style="margin-top:4px">${all.map(b=>betCard(b,false)).join("")}</div>`;
+  out.innerHTML=html;
+  const tog=$("#showAll"), box=$("#allBox");
+  tog.addEventListener("click",()=>{
+    const open=!box.classList.contains("hidden");
+    box.classList.toggle("hidden",open);
+    tog.textContent = open ? `Show all ${all.length} comparisons ▾` : "Hide comparisons ▴";
+  });
+}
+
+function flash(msg){
+  result.classList.remove("hidden");
+  result.innerHTML=`<div class="card"><div class="notice">${esc(msg)}</div></div>`;
+}
+
+init();
+</script>
+</body>
+</html>
