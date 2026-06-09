@@ -3,6 +3,7 @@ import { db } from "./firebase.js";
 import {
   doc, getDoc, setDoc, onSnapshot
 } from "firebase/firestore";
+import PredictScreen from "./PredictScreen.jsx";
 
 /* ═══════════════════════════════════════════════════════════
    ROLLOVER TRACKER — FIREBASE CLOUD SAVE EDITION
@@ -430,8 +431,10 @@ export default function App() {
       {view==="home"    && (
         <HomeScreen allPlans={allPlans} onOpen={openPlan}
           onShowCode={()=>setShowCode(true)}
-          onRestore={()=>setRM(true)}/>
+          onRestore={()=>setRM(true)}
+          onPredict={()=>setView("predict")}/>
       )}
+      {view==="predict" && <PredictScreen onBack={()=>setView("home")}/>}
       {view==="setup"   && <SetupScreen presetId={setupId} onSetup={handleSetup} onBack={()=>setView("home")}/>}
       {view==="plan" && allPlans[active] && (
         <PlanView
@@ -462,7 +465,7 @@ function SplashScreen() {
 }
 
 /* ═══════════════════ HOME ══════════════════════════════════ */
-function HomeScreen({allPlans, onOpen, onShowCode, onRestore}) {
+function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
   const vals  = Object.values(allPlans);
   const total = vals.reduce((s,{state:st})=>s+st.AB+st.SR, 0);
   const cur   = vals[0]?.plan?.currency || "TSH";
@@ -541,6 +544,21 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore}) {
           </div>
         );
       })()}
+
+      <button onClick={onPredict} style={{width:"100%",background:"none",border:"none",padding:0,
+        cursor:"pointer",marginBottom:14,textAlign:"left",animation:"fadeUp 0.45s ease"}}>
+        <div style={{background:"linear-gradient(135deg,#00E5FF14,transparent)",border:"1px solid #00E5FF33",
+          borderRadius:16,padding:16,display:"flex",alignItems:"center",justifyContent:"space-between",
+          boxShadow:"0 0 30px rgba(0,229,255,0.06)"}}>
+          <div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:14,color:"#00E5FF",letterSpacing:1}}>⚽ MATCH PREDICTIONS</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55",letterSpacing:1,marginTop:4}}>
+              Win %, goals &amp; value · 18 leagues + World Cup
+            </div>
+          </div>
+          <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,color:"#00E5FF"}}>→</div>
+        </div>
+      </button>
 
       <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff22",letterSpacing:3,marginBottom:14,paddingLeft:2}}>
         SELECT PLAN
