@@ -103,7 +103,8 @@ const STYLE = `
 
 /* ─────────────────────────────────────────────────────────────────── */
 export default function PredictScreen({ onBack }){
-  const [mode, setMode] = useState("upcoming"); // upcoming | manual
+  const [mode, setMode] = useState("upcoming"); // upcoming | best | track | manual
+  const TABS = [["upcoming","UPCOMING"],["best","TIPS"],["track","TRACK"],["manual","PICK"]];
   return (
     <div style={st.wrap}>
       <style>{STYLE}</style>
@@ -113,21 +114,25 @@ export default function PredictScreen({ onBack }){
       <div style={st.sub}>MODEL · MARKET · BLENDED VERDICT</div>
 
       {/* mode toggle */}
-      <div style={{display:"flex", gap:6, background:"#ffffff06", border:`1px solid ${C.line}`,
+      <div style={{display:"flex", gap:5, background:"#ffffff06", border:`1px solid ${C.line}`,
         borderRadius:13, padding:5, marginBottom:18}}>
-        <button className="rl-tab" onClick={()=>setMode("upcoming")}
-          style={{background: mode==="upcoming"?"linear-gradient(135deg,#00E5FF,#00B8D4)":"transparent",
-            color: mode==="upcoming"?"#001318":C.soft, boxShadow: mode==="upcoming"?"0 0 16px #00E5FF44":"none"}}>
-          UPCOMING
-        </button>
-        <button className="rl-tab" onClick={()=>setMode("manual")}
-          style={{background: mode==="manual"?"linear-gradient(135deg,#00E5FF,#00B8D4)":"transparent",
-            color: mode==="manual"?"#001318":C.soft, boxShadow: mode==="manual"?"0 0 16px #00E5FF44":"none"}}>
-          PICK A MATCH
-        </button>
+        {TABS.map(([id,label])=>{
+          const on = mode===id;
+          return (
+            <button key={id} className="rl-tab" onClick={()=>setMode(id)}
+              style={{fontSize:9.5, letterSpacing:0.5, padding:"11px 4px", whiteSpace:"nowrap",
+                background: on?"linear-gradient(135deg,#00E5FF,#00B8D4)":"transparent",
+                color: on?"#001318":C.soft, boxShadow: on?"0 0 16px #00E5FF44":"none"}}>
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {mode==="upcoming" ? <UpcomingTab/> : <ManualTab/>}
+      {mode==="upcoming" && <UpcomingTab/>}
+      {mode==="best"     && <BestTipsTab/>}
+      {mode==="track"    && <TrackRecordTab/>}
+      {mode==="manual"   && <ManualTab/>}
     </div>
   );
 }
@@ -652,6 +657,264 @@ function ValueResult({ res }){
         {open ? "HIDE ALL COMPARISONS ▴" : `SHOW ALL ${all.length} COMPARISONS ▾`}
       </button>
       {open && all.map((b,i)=><BetRow key={i} b={b}/>)}
+    </div>
+  );
+}
+
+/* ═══════════════════ BEST TIPS ═══════════════════════════════════ */
+/* Ranks the strongest calls across every upcoming match in one view:
+   – Highest confidence: blended top picks, sorted by probability
+   – Biggest disagreement: where the model most diverges from the market   */
+function BestTipsTab(){
+  const [matches, setMatches] = useState(null);
+  const [err, setErr] = useState("");
+
+  useEffect(()=>{
+    let live=true;
+    fetch(`${API}/api/live/matches?hours=120`)
+      .then(r=> r.ok ? r.json() : r.json().then(j=>Promise.reject(new Error(j.detail||"Could not load fixtures."))))
+      .then(d=>{ if(live) setMatches(d.matches||[]); })
+      .catch(e=>{ if(live) setErr(e.message); });
+    return ()=>{ live=false; };
+  },[]);
+
+  if(err) return <div style={st.notice}>{err}</div>;
+  if(matches===null) return <SkeletonList/>;
+
+  const ok = matches.filter(m=> m.matched && m.prediction && m.prediction.tips);
+  if(ok.length===0){
+    return <div style={{...st.card, textAlign:"center", padding:"30px 16px", fontFamily:mono, fontSize:11, color:C.dim, lineHeight:1.7}}>
+      No tips yet — fixtures appear here once odds are in.</div>;
+  }
+
+  // strongest = highest blended pick probability
+  const strongest = [...ok].sort((a,b)=> b.prediction.tips.result_pick.prob - a.prediction.tips.result_pick.prob).slice(0,6);
+
+  // value = biggest positive (model − market) on any outcome
+  const valued = ok.map(m=>{
+    const e = m.prediction.model_vs_market_edge || {};
+    let best={k:null,v:-9}; for(const k of ["home","draw","away"]) if((e[k]??-9)>best.v) best={k,v:e[k]};
+    return {m, key:best.k, edge:best.v};
+  }).filter(x=> x.key && x.edge >= 0.03)
+    .sort((a,b)=> b.edge - a.edge).slice(0,6);
+
+  const sideLabel = (m,k)=> k==="home"? short(m.home) : k==="away"? short(m.away) : "Draw";
+
+  return (
+    <div>
+      <SectionHead title="HIGHEST CONFIDENCE" hint="Where the blended model is most sure" col={C.cyan}/>
+      {strongest.map((m,i)=>{
+        const t=m.prediction.tips.result_pick; const k=kickLabel(m.kickoff); const cCol=confColor(t.confidence);
+        return (
+          <div key={m.event_id} className="rl-card" style={{...st.card, padding:"13px 14px", marginBottom:10, animationDelay:`${i*0.04}s`}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:10}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                  {short(m.home)} <span style={{color:C.mute, fontWeight:400}}>v</span> {short(m.away)}
+                </div>
+                <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginTop:4}}>{k.when}{k.rel?` · ${k.rel}`:""}</div>
+              </div>
+              <div style={{textAlign:"right", flexShrink:0}}>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:"#fff"}}>{t.label}</div>
+                <div style={{display:"flex", alignItems:"center", gap:7, justifyContent:"flex-end", marginTop:4}}>
+                  <span style={st.chip(cCol)}>{t.confidence}</span>
+                  <span style={{fontFamily:orb, fontWeight:900, fontSize:15, color:cCol}}>{pc(t.prob)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{height:8}}/>
+      <SectionHead title="BIGGEST MARKET DISAGREEMENT" hint="Model rates these higher than the bookies — possible value" col={C.gold}/>
+      {valued.length===0 ? (
+        <div style={{...st.card, textAlign:"center", padding:"20px 14px", fontFamily:mono, fontSize:10.5, color:C.dim, lineHeight:1.6}}>
+          The model broadly agrees with the market right now. No standout disagreements — that’s normal.
+        </div>
+      ) : valued.map(({m,key,edge},i)=>{
+        const e=m.prediction; const mod=e.model_1x2[key], mkt=e.market_1x2?.[key];
+        return (
+          <div key={m.event_id} className="rl-card" style={{...st.card, padding:"13px 14px", marginBottom:10,
+            border:"1px solid #FFB30033", background:"linear-gradient(135deg,#FFB30010,transparent)", animationDelay:`${i*0.04}s`}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:10}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                  {short(m.home)} <span style={{color:C.mute, fontWeight:400}}>v</span> {short(m.away)}
+                </div>
+                <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginTop:4}}>
+                  {sideLabel(m,key)} — model <b style={{color:"#fff"}}>{pc(mod)}</b> vs market <b style={{color:"#fff"}}>{pc(mkt)}</b>
+                </div>
+              </div>
+              <div style={{fontFamily:orb, fontWeight:900, fontSize:16, color:C.gold, flexShrink:0}}>+{Math.round(edge*100)}%</div>
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{textAlign:"center", fontFamily:mono, fontSize:9, color:C.mute, letterSpacing:1, marginTop:8, lineHeight:1.7}}>
+        DISAGREEMENT IS A SIGNAL, NOT A GUARANTEE · ALWAYS YOUR CALL
+      </div>
+    </div>
+  );
+}
+
+function SectionHead({ title, hint, col }){
+  return (
+    <div style={{marginBottom:10}}>
+      <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:col, letterSpacing:1.5}}>{title}</div>
+      <div style={{fontFamily:mono, fontSize:9, color:C.soft, marginTop:3}}>{hint}</div>
+    </div>
+  );
+}
+
+/* ═══════════════════ TRACK RECORD ════════════════════════════════ */
+/* Live scorecard: how the predictions are actually doing vs results & market */
+function TrackRecordTab(){
+  const [sc, setSc] = useState(null);
+  const [err, setErr] = useState("");
+
+  useEffect(()=>{
+    let live=true;
+    fetch(`${API}/api/live/scorecard`)
+      .then(r=> r.ok ? r.json() : r.json().then(j=>Promise.reject(new Error(j.detail||"Could not load the scorecard."))))
+      .then(d=>{ if(live) setSc(d); })
+      .catch(e=>{ if(live) setErr(e.message); });
+    return ()=>{ live=false; };
+  },[]);
+
+  if(err) return <div style={st.notice}>{err}</div>;
+  if(sc===null) return (
+    <div style={{textAlign:"center", padding:"40px 0", fontFamily:mono, fontSize:11, color:C.soft}}>
+      <span className="rl-spin"/>  Loading the track record…
+    </div>
+  );
+
+  const counts = (
+    <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14}}>
+      <div style={st.tile}><div style={st.tk}>TRACKED</div><div style={st.tv}>{sc.tracked}</div></div>
+      <div style={st.tile}><div style={st.tk}>GRADED</div><div style={{...st.tv, color:C.cyan}}>{sc.settled}</div></div>
+      <div style={st.tile}><div style={st.tk}>PENDING</div><div style={st.tv}>{sc.pending}</div></div>
+    </div>
+  );
+
+  if(!sc.settled){
+    return (
+      <div>
+        {counts}
+        <div style={{...st.card, textAlign:"center", padding:"26px 18px"}}>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"#fff", marginBottom:8}}>GATHERING RESULTS</div>
+          <div style={{fontFamily:mono, fontSize:11, color:C.dim, lineHeight:1.7}}>
+            {sc.message || "Your first graded predictions appear here once logged matches finish."}
+          </div>
+        </div>
+        <RecordFooter/>
+      </div>
+    );
+  }
+
+  const hr = sc.hit_rate, mf = sc.market_favourite_hit_rate;
+  const beat = (hr!=null && mf!=null) ? hr - mf : null;
+  const beatCol = beat==null ? C.soft : beat>=0 ? C.green : C.red;
+  const b = sc.brier || {};
+  const bMax = Math.max(b.model||0, b.blend||0, b.market||0, 0.0001);
+  const brierBar = (label,v,col)=> v==null ? null : (
+    <div style={{marginBottom:9}}>
+      <div style={{display:"flex", justifyContent:"space-between", fontFamily:mono, fontSize:9.5, color:C.dim, marginBottom:4}}>
+        <span>{label}</span><span style={{color:"#fff"}}>{v.toFixed(3)}</span>
+      </div>
+      <div style={{height:7, borderRadius:6, background:"#ffffff08", overflow:"hidden"}}>
+        <div className="rl-bar" style={{height:"100%", width:`${(v/bMax)*100}%`, background:col, borderRadius:6}}/>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      {counts}
+
+      {/* hero hit-rate */}
+      <div style={{...st.card, textAlign:"center", padding:"20px 16px"}}>
+        <div style={{fontFamily:mono, fontSize:8.5, color:C.soft, letterSpacing:2, marginBottom:6}}>BLENDED TOP-PICK ACCURACY</div>
+        <div style={{fontFamily:orb, fontWeight:900, fontSize:40, color:C.cyan, textShadow:"0 0 24px #00E5FF44", lineHeight:1}}>{pc(hr)}</div>
+        {mf!=null && (
+          <div style={{fontFamily:mono, fontSize:10.5, color:C.dim, marginTop:12}}>
+            vs market favourite <b style={{color:"#fff"}}>{pc(mf)}</b>
+            <span style={{color:beatCol, fontFamily:orb, fontWeight:700, marginLeft:8}}>
+              {beat>=0?"+":""}{Math.round(beat*100)}%
+            </span>
+          </div>
+        )}
+        <div style={{fontFamily:mono, fontSize:9, color:C.soft, marginTop:6}}>across {sc.settled} graded prediction{sc.settled===1?"":"s"}</div>
+      </div>
+
+      {/* sharpness vs market */}
+      {(b.blend!=null) && (
+        <div style={st.card}>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"#fff", letterSpacing:1, marginBottom:4}}>SHARPNESS (BRIER — LOWER IS BETTER)</div>
+          <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginBottom:14, lineHeight:1.5}}>How tight the probabilities were against what actually happened.</div>
+          {brierBar("Model only", b.model, "#2b3547")}
+          {brierBar("Blended (our call)", b.blend, C.cyan)}
+          {brierBar("Bookmaker market", b.market, C.gold)}
+          {b.market!=null && (
+            <div style={{marginTop:10, padding:"10px 12px", borderRadius:11, textAlign:"center",
+              border:`1px solid ${sc.blend_beats_market?C.green:C.soft}44`,
+              background: sc.blend_beats_market? "linear-gradient(135deg,#69FF4712,transparent)" : "#ffffff05"}}>
+              <span style={{fontFamily:orb, fontWeight:700, fontSize:11, color: sc.blend_beats_market?C.green:C.dim}}>
+                {sc.blend_beats_market ? "✓ BLEND IS BEATING THE MARKET" : "MARKET STILL SHARPER — KEEP WATCHING"}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* by competition */}
+      {sc.by_competition && (sc.by_competition.internationals.settled>0 || sc.by_competition.clubs.settled>0) && (
+        <div style={st.card}>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"#fff", letterSpacing:1, marginBottom:12}}>BY COMPETITION</div>
+          {["internationals","clubs"].map(key=>{
+            const c=sc.by_competition[key]; if(!c || c.settled===0) return null;
+            return (
+              <div key={key} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0",
+                borderBottom: key==="internationals" && sc.by_competition.clubs.settled>0 ? `1px solid ${C.line}`:"none"}}>
+                <span style={{fontFamily:mono, fontSize:11, color:C.dim, textTransform:"capitalize"}}>{key}</span>
+                <span style={{fontFamily:mono, fontSize:10, color:C.soft}}>
+                  <b style={{color:"#fff", fontFamily:orb, fontSize:13}}>{pc(c.hit_rate)}</b> · {c.settled} graded
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* recent results */}
+      {sc.recent && sc.recent.length>0 && (
+        <div style={st.card}>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"#fff", letterSpacing:1, marginBottom:10}}>RECENT RESULTS</div>
+          {sc.recent.map((r,i)=>(
+            <div key={i} style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8,
+              padding:"9px 0", borderBottom: i<sc.recent.length-1?`1px solid ${C.line}`:"none"}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontFamily:mono, fontSize:11, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{r.match}</div>
+                <div style={{fontFamily:mono, fontSize:9, color:C.soft, marginTop:3}}>
+                  picked {String(r.pick||"").toUpperCase()} · ended {String(r.result||"").toUpperCase()} {r.score?`(${r.score})`:""}
+                </div>
+              </div>
+              <span style={{fontFamily:orb, fontWeight:700, fontSize:13, flexShrink:0, color: r.hit?C.green:C.red}}>{r.hit?"✓":"✗"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <RecordFooter/>
+    </div>
+  );
+}
+
+function RecordFooter(){
+  return (
+    <div style={{textAlign:"center", fontFamily:mono, fontSize:9, color:C.mute, letterSpacing:1, marginTop:6, lineHeight:1.7}}>
+      EACH PREDICTION IS FROZEN BEFORE KICKOFF, THEN GRADED ON THE RESULT
     </div>
   );
 }
