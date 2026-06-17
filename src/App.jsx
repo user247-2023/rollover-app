@@ -156,6 +156,47 @@ function gradeTip(tip, sc){
   return null; // team_goals, halves, corners, cards, throw-ins, manual → stay manual
 }
 
+/* ── Tip archive helpers ───────────────────────────────────────────── */
+function toArchiveEntry(r){
+  const result = (r.result==="WIN"||r.result==="LOSS") ? r.result : (r.autoResult||"PENDING");
+  const odds = r.odds||1.85;
+  const profitTSH = r.profitTSH!=null ? r.profitTSH
+    : (r.stake>0 ? (result==="WIN" ? r.stake*(odds-1) : result==="LOSS" ? -r.stake : 0) : 0);
+  return {
+    id:r.id, match:r.match||"", league:r.league||"", market:r.market||"", pick:r.pick||"",
+    odds:r.odds||null, confidence:r.confidence||null, result, score:r.autoScore||r.score||"",
+    stake:r.stake||0, profitTSH, settle_type:r.settle_type||"", date:r.date||"",
+    autoGraded: !!r.autoResult && !(r.result==="WIN"||r.result==="LOSS"), archivedAt:Date.now(),
+  };
+}
+// Separate finished tips (settled or auto-graded) from the rest. If olderThanDays
+// is set, only finished tips that old are split off (recent ones stay in Results).
+function splitDone(tipResults, olderThanDays){
+  const now=Date.now();
+  const oldEnough=(r)=>{
+    if(olderThanDays==null) return true;
+    const t=r.settledAt||r.autoSettledAt||(r.date?Date.parse(r.date+"T00:00:00Z"):now);
+    return (now-t) > olderThanDays*24*3600*1000;
+  };
+  const done=[], keep=[];
+  for(const r of (tipResults||[])){
+    const isDone = r.result==="WIN"||r.result==="LOSS"||r.autoResult;
+    if(isDone && oldEnough(r)) done.push(r); else keep.push(r);
+  }
+  return {keep, done};
+}
+function exportArchiveCSV(archive, plan){
+  const esc=(v)=>{ const x=String(v==null?"":v); return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x; };
+  const head=["date","match","league","market","pick","odds","result","score","stake","profit","currency"];
+  const rows=(archive||[]).map(a=>[a.date,a.match,a.league,a.market,a.pick,a.odds,a.result,a.score,a.stake,Math.round(a.profitTSH||0),(plan&&plan.currency)||"TSH"]);
+  const csv=[head.join(","), ...rows.map(r=>r.map(esc).join(","))].join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url; link.download=`rollover-tips-${((plan&&(plan.name||plan.label))||"archive").replace(/[^a-z0-9]/gi,"-")}-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+}
+
 const TSH_TO_USD = 2650; // 1 USD ≈ 2650 TSH
 
 function fmtDual(tsh) {
@@ -228,7 +269,7 @@ const PRESETS = [
   {id:"beta", label:"BETA", color:"#69FF47",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#69FF47,#00C853)",odds:1.20,wdPct:0.25,emoji:"β"},
   {id:"gamma",label:"GAMMA",color:"#E040FB",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#E040FB,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
 ];
-const TABS = ["TODAY","TIPS","RESULTS","HISTORY","RESERVE","SETTINGS"];
+const TABS = ["TODAY","TIPS","RESULTS","ARCHIVE","HISTORY","RESERVE","SETTINGS"];
 
 // ── Animated counter ─────────────────────────────────────────────
 function useCountUp(target, duration=700) {
@@ -388,8 +429,11 @@ export default function App() {
   const trackTips = async (tips) => {
     const list = Array.isArray(tips) ? tips : [tips];
     const {plan, state:st} = allPlans[active];
-    const existing = st.tipResults || [];
-    const have = new Set(existing.map(tipKeyOf));
+    // 1. File finished tips from the previous batch into the permanent archive.
+    const {keep, done} = splitDone(st.tipResults||[], null);
+    const archive = [...(st.tipArchive||[]), ...done.map(toArchiveEntry)];
+    // 2. Add the new tips as PENDING (dedup against active + archive).
+    const have = new Set([...keep.map(tipKeyOf), ...archive.map(tipKeyOf)]);
     const additions = [];
     for(const t of list){
       const k = tipKeyOf(t);
@@ -400,14 +444,28 @@ export default function App() {
         match:t.match||"", league:t.league||"", market:t.market||"", pick:t.pick||"",
         odds, stake:0, result:"PENDING", currency:plan.currency,
         confidence: t.confidence || null,
+        settle_type: t.settle_type||"", line:(t.line!=null?t.line:null), side:t.side||null,
+        home_team: t.home_team||"", away_team: t.away_team||"",
         id: Math.random().toString(36).substr(2,8),
         date: new Date().toISOString().split("T")[0], timestamp: Date.now(),
       });
     }
-    if(additions.length===0){ showToast("All tips already tracked", "info"); return; }
-    const ns = {...st, tipResults:[...existing, ...additions]};
+    const ns = {...st, tipResults:[...keep, ...additions], tipArchive: archive};
     await persist({...allPlans, [active]:{plan, state:ns}});
-    showToast(`✦ Tracking ${additions.length} tip${additions.length>1?"s":""} → Results`, "win");
+    const parts=[];
+    if(done.length) parts.push(`${done.length} archived`);
+    if(additions.length) parts.push(`${additions.length} new`);
+    showToast(parts.length ? `✦ ${parts.join(" · ")} → Results` : "All tips already tracked", (additions.length||done.length)?"win":"info");
+  };
+
+  // Manually file all finished tips into the archive (Clear & Archive button).
+  const archiveNow = async () => {
+    const {plan, state:st} = allPlans[active];
+    const {keep, done} = splitDone(st.tipResults||[], null);
+    if(!done.length){ showToast("Nothing to archive yet", "info"); return; }
+    const archive = [...(st.tipArchive||[]), ...done.map(toArchiveEntry)];
+    await persist({...allPlans, [active]:{plan, state:{...st, tipResults:keep, tipArchive:archive}}});
+    showToast(`✦ ${done.length} tip${done.length>1?"s":""} archived`, "win");
   };
 
   // Settle a pending tip (WIN/LOSS) with the stake actually placed.
@@ -433,30 +491,35 @@ export default function App() {
     showToast("Removed from tracker", "info");
   };
 
-  // Auto-grade pending goals-family tips from the free results feed.
-  const autoSettlePending = async (planId) => {
+  // Auto-grade pending goals tips from the feed, then file finished tips older than 3 days.
+  const maintainResults = async (planId) => {
     const entry = allPlans[planId]; if(!entry) return;
     const st = entry.state || {};
-    const hasPending = (st.tipResults||[]).some(r=>r.result==="PENDING" && !r.autoResult);
-    if(!hasPending) return;
-    const map = await fetchResults(); if(!map) return;
+    let tipResults = st.tipResults || [];
     let changed=false;
-    const tipResults=(st.tipResults||[]).map(r=>{
-      if(r.result!=="PENDING" || r.autoResult) return r;
-      const sc=findResult(r,map); if(!sc) return r;
-      const g=gradeTip(r,sc); if(!g) return r;
-      changed=true;
-      return {...r, autoResult:g, autoScore:`${sc.hg}-${sc.ag}`, autoSettledAt:Date.now()};
-    });
+    if(tipResults.some(r=>r.result==="PENDING" && !r.autoResult)){
+      const map = await fetchResults();
+      if(map){
+        tipResults = tipResults.map(r=>{
+          if(r.result!=="PENDING" || r.autoResult) return r;
+          const sc=findResult(r,map); if(!sc) return r;
+          const g=gradeTip(r,sc); if(!g) return r;
+          changed=true;
+          return {...r, autoResult:g, autoScore:`${sc.hg}-${sc.ag}`, autoSettledAt:Date.now()};
+        });
+      }
+    }
+    const {keep, done} = splitDone(tipResults, 3);
+    let archive = st.tipArchive || [];
+    if(done.length){ archive=[...archive, ...done.map(toArchiveEntry)]; tipResults=keep; changed=true; }
     if(changed){
-      await persist({...allPlans, [planId]:{plan:entry.plan, state:{...st, tipResults}}});
-      showToast("✦ Tip results auto-updated", "win");
+      await persist({...allPlans, [planId]:{plan:entry.plan, state:{...st, tipResults, tipArchive:archive}}});
     }
   };
 
   useEffect(()=>{
     if(view==="plan" && tab==="RESULTS" && active && allPlans[active]){
-      autoSettlePending(active);
+      maintainResults(active);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[view, tab, active]);
@@ -628,7 +691,8 @@ export default function App() {
           preset={preset} tab={tab} setTab={setTab}
           onBet={logBet} onBack={()=>setView("home")} onDelete={()=>deletePlan(active)}
           onLogTip={logTipResult}
-          onTrack={trackTips} onSettle={settleTip} onRemove={removeTip}/>
+          onTrack={trackTips} onSettle={settleTip} onRemove={removeTip}
+          onArchive={archiveNow}/>
       )}
     </div>
   );
@@ -837,7 +901,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
 }
 
 /* ═══════════════════ PLAN VIEW ═════════════════════════════ */
-function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTrack,onSettle,onRemove}) {
+function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTrack,onSettle,onRemove,onArchive}) {
   const risk   = riskInfo(st.streak||0, st.AB, st.SR);
   const wdCalc = calcWD(st.AB, st.day, st.lastWD, st.crossed, plan.wdPct);
   const nextWD = 7 - ((st.day-1) % 7);
@@ -878,7 +942,8 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTr
       <div style={{animation:"fadeUp 0.2s ease"}}>
         {tab==="TODAY"     && <TodayTab    plan={plan} st={st} risk={risk} nextWD={nextWD} wdCalc={wdCalc} onBet={onBet} preset={preset}/>}
         {tab==="TIPS"      && <TipsTab     plan={plan} st={st} preset={preset} onTrack={onTrack}/>}
-        {tab==="RESULTS"   && <ResultsTab  plan={plan} st={st} preset={preset} onLogTip={onLogTip} onSettle={onSettle} onRemove={onRemove}/>}
+        {tab==="RESULTS"   && <ResultsTab  plan={plan} st={st} preset={preset} onLogTip={onLogTip} onSettle={onSettle} onRemove={onRemove} onArchive={onArchive}/>}
+        {tab==="ARCHIVE"   && <ArchiveTab   plan={plan} st={st} preset={preset}/>}
         {tab==="HISTORY"   && <HistTab     plan={plan} st={st} preset={preset}/>}
         {tab==="RESERVE"   && <SRTab       plan={plan} st={st} preset={preset}/>}
         {tab==="SETTINGS"  && <SetTab      plan={plan} preset={preset} onDelete={onDelete}/>}
@@ -1014,7 +1079,7 @@ function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
 
 /* ═══════════════════ HISTORY ═══════════════════════════════ */
 /* ═══════════════════ RESULTS TAB ════════════════════════════ */
-function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove}) {
+function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive}) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     match:"", league:"", market:"", pick:"", odds:"", stake:"", result:"WIN"
@@ -1144,6 +1209,16 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove}) {
           </div>
           {pending.map(t=> <PendingTipRow key={t.id} tip={t} preset={preset} onSettle={onSettle} onRemove={onRemove}/>)}
         </div>
+      )}
+
+      {/* Clear & Archive finished tips */}
+      {(st.tipResults||[]).some(r=>r.result==="WIN"||r.result==="LOSS"||r.autoResult) && (
+        <button onClick={onArchive}
+          style={{width:"100%",background:"#ffffff06",border:"1px solid #ffffff22",borderRadius:12,
+            color:"#ffffff99",fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:10.5,
+            padding:"11px",cursor:"pointer",letterSpacing:1,marginBottom:10}}>
+          {"\u21b3 CLEAR & ARCHIVE FINISHED TIPS"}
+        </button>
       )}
 
       {/* Log a tip result button */}
@@ -2092,6 +2167,145 @@ const S={
 
 
 /* One pending tip awaiting its result (pulled from the TIPS tab) */
+/* ═══════════════════ ARCHIVE TAB ════════════════════════════ */
+function ArchiveTab({plan, st, preset}){
+  const [q, setQ] = useState("");
+  const archive = (st.tipArchive||[]);
+  const wins = archive.filter(a=>a.result==="WIN").length;
+  const losses = archive.filter(a=>a.result==="LOSS").length;
+  const graded = wins+losses;
+  const acc = graded ? Math.round(wins/graded*100) : null;
+  const staked = archive.filter(a=>a.stake>0);
+  const totalStake = staked.reduce((s,a)=>s+(a.stake||0),0);
+  const totalProfit = archive.reduce((s,a)=>s+(a.profitTSH||0),0);
+  const roi = totalStake>0 ? (totalProfit/totalStake*100) : null;
+
+  const breakdown = (keyFn)=>{
+    const m={};
+    for(const a of archive){
+      if(a.result!=="WIN" && a.result!=="LOSS") continue;
+      const k=(keyFn(a)||"Other").trim()||"Other";
+      if(!m[k]) m[k]={w:0,l:0};
+      m[k][a.result==="WIN"?"w":"l"]++;
+    }
+    return Object.entries(m).map(([k,v])=>({k,w:v.w,l:v.l,n:v.w+v.l,acc:Math.round(v.w/(v.w+v.l)*100)}))
+      .sort((a,b)=>b.n-a.n);
+  };
+  const marketBreak = breakdown(a=> (a.market||"").replace(/[0-9.]+/g,"").replace(/\s+/g," ").trim() || a.market);
+  const leagueBreak = breakdown(a=> a.league);
+
+  const ql=q.toLowerCase();
+  const hist = archive.slice().sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0))
+    .filter(a=> !ql || (`${a.match} ${a.league} ${a.market} ${a.pick}`).toLowerCase().includes(ql));
+
+  const tk={fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff55",letterSpacing:2,marginBottom:4};
+  const tv={fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:18,color:"#fff"};
+  const accCol=(p)=> p>=55?"#69FF47":p>=45?"#FFD600":"#FF1744";
+
+  if(archive.length===0){
+    return (
+      <div style={{...S.glassCard, textAlign:"center", padding:"30px 18px"}}>
+        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:14,color:"#fff",marginBottom:8}}>ARCHIVE EMPTY</div>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#ffffff66",lineHeight:1.7}}>
+          Finished tips move here automatically when you pull new tips, or when you tap
+          {" \u201cClear & Archive\u201d"} in Results. Your full history and accuracy breakdowns build up here for analysis.
+        </div>
+      </div>
+    );
+  }
+
+  const BreakBlock = ({title, rows})=> (
+    <div style={{...S.glassCard, marginBottom:12}}>
+      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color,letterSpacing:2,marginBottom:12}}>{title}</div>
+      {rows.slice(0,12).map((r,i)=>(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",
+          borderBottom:i<Math.min(rows.length,12)-1?"1px solid #ffffff0d":"none"}}>
+          <div style={{flex:1,minWidth:0,fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffffcc",
+            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.k}</div>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55"}}>{r.w}W-{r.l}L</div>
+          <div style={{width:42,textAlign:"right",fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,color:accCol(r.acc)}}>{r.acc}%</div>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* lifetime summary */}
+      <div style={S.glassCard}>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:preset.color,
+          letterSpacing:3,marginBottom:14}}>ARCHIVE · LIFETIME</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div style={{...S.glassCard,margin:0,padding:"12px"}}>
+            <div style={tk}>TIP ACCURACY</div>
+            <div style={{...tv,color:acc!=null?accCol(acc):"#fff"}}>{acc!=null?acc+"%":"—"}</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>{wins}W · {losses}L</div>
+          </div>
+          <div style={{...S.glassCard,margin:0,padding:"12px"}}>
+            <div style={tk}>TIPS ARCHIVED</div>
+            <div style={{...tv,color:preset.color}}>{archive.length}</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>{graded} graded</div>
+          </div>
+          <div style={{...S.glassCard,margin:0,padding:"12px"}}>
+            <div style={tk}>P&L (STAKED)</div>
+            <div style={{...tv,color:totalProfit>=0?"#69FF47":"#FF1744"}}>{totalProfit>=0?"+":""}{fmt(Math.round(totalProfit), plan.currency)}</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>{staked.length} staked</div>
+          </div>
+          <div style={{...S.glassCard,margin:0,padding:"12px"}}>
+            <div style={tk}>ROI</div>
+            <div style={{...tv,color:roi==null?"#fff":roi>=0?"#69FF47":"#FF1744"}}>{roi==null?"—":(roi>=0?"+":"")+roi.toFixed(1)+"%"}</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>on {fmt(Math.round(totalStake), plan.currency)}</div>
+          </div>
+        </div>
+        <button onClick={()=>exportArchiveCSV(archive, plan)}
+          style={{width:"100%",background:`linear-gradient(135deg,${preset.color}22,${preset.color}11)`,
+            border:`1px solid ${preset.color}55`,borderRadius:10,color:preset.color,
+            fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:11,padding:"11px",cursor:"pointer",letterSpacing:1}}>
+          {"\u2b07 EXPORT CSV FOR ANALYSIS"}
+        </button>
+      </div>
+
+      {marketBreak.length>0 && <BreakBlock title="ACCURACY BY MARKET" rows={marketBreak}/>}
+      {leagueBreak.length>0 && <BreakBlock title="ACCURACY BY LEAGUE" rows={leagueBreak}/>}
+
+      {/* history + search */}
+      <div style={S.glassCard}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color,letterSpacing:2}}>HISTORY · {archive.length}</div>
+        </div>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search match, league, market…"
+          style={{...S.input,marginBottom:12,fontSize:12,padding:"9px 11px"}}/>
+        {hist.length===0 && <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff44",textAlign:"center",padding:"14px 0"}}>No matches.</div>}
+        {hist.slice(0,200).map((a,i)=>{
+          const col = a.result==="WIN"?"#69FF47":a.result==="LOSS"?"#FF1744":"#ffffff55";
+          return (
+            <div key={a.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",
+              borderBottom:i<Math.min(hist.length,200)-1?"1px solid #ffffff0d":"none"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:10.5,color:"#fff",
+                  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.match}</div>
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:8.5,color:"#ffffff55",marginTop:3,
+                  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {a.pick}{a.score?` · ${a.score}`:""}{a.date?` · ${a.date}`:""}
+                </div>
+              </div>
+              {a.stake>0 && (
+                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:a.profitTSH>=0?"#69FF47":"#FF1744",flexShrink:0}}>
+                  {a.profitTSH>=0?"+":""}{fmt(Math.round(a.profitTSH), plan.currency)}
+                </div>
+              )}
+              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col,flexShrink:0,width:16,textAlign:"center"}}>
+                {a.result==="WIN"?"\u2713":a.result==="LOSS"?"\u2715":"\u00b7"}
+              </div>
+            </div>
+          );
+        })}
+        {hist.length>200 && <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",textAlign:"center",marginTop:10}}>Showing 200 of {hist.length} — export CSV for the full set.</div>}
+      </div>
+    </div>
+  );
+}
+
 function PendingTipRow({ tip, preset, onSettle, onRemove }){
   const [stake, setStake] = useState("");
   const s = parseFloat(stake);
