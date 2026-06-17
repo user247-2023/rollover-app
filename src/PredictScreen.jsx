@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { db } from "./firebase.js";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════
    ROLLOVER · MATCH INTELLIGENCE
@@ -37,6 +39,80 @@ function kickLabel(iso){
   return { when: sameDay ? `Today ${time}` : `${day} · ${time}`, rel };
 }
 const confColor = (c)=> c==="High"?C.green : c==="Medium"?C.cyan : C.gold;
+
+/* ── Durable prediction archive: Firebase + free results feed ───────── */
+function predDeviceId(){
+  let id = localStorage.getItem("rolloverDeviceId");
+  if(!id){ id = "RLV-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("rolloverDeviceId", id); }
+  return id;
+}
+async function loadPredArchive(){
+  try{ const snap = await getDoc(doc(db,"predictions",predDeviceId())); return snap.exists() ? (snap.data().log||[]) : []; }
+  catch(e){ try{ return JSON.parse(localStorage.getItem("predArchive")||"[]"); }catch(_){ return []; } }
+}
+async function savePredArchive(log){
+  try{ await setDoc(doc(db,"predictions",predDeviceId()), {log, updatedAt:Date.now()}); }
+  catch(e){ try{ localStorage.setItem("predArchive", JSON.stringify(log)); }catch(_){ } }
+}
+const PRED_ALIASES = { korearepublic:"southkorea", southkorea:"southkorea", koreadpr:"northkorea",
+  usa:"unitedstates", unitedstatesofamerica:"unitedstates", unitedstates:"unitedstates",
+  czechia:"czechrepublic", czechrepublic:"czechrepublic", turkiye:"turkey", turkey:"turkey", iran:"iran",
+  ivorycoast:"ivorycoast", cotedivoire:"ivorycoast", drcongo:"drcongo", congodr:"drcongo",
+  capeverde:"capeverde", caboverde:"capeverde", china:"chinapr", chinapr:"chinapr",
+  bosnia:"bosniaandherzegovina", bosniaandherzegovina:"bosniaandherzegovina",
+  uae:"unitedarabemirates", unitedarabemirates:"unitedarabemirates",
+  northmacedonia:"northmacedonia", macedonia:"northmacedonia",
+  republicofireland:"republicofireland", ireland:"republicofireland", curacao:"curacao" };
+function predNorm(x){ let n=(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,""); return PRED_ALIASES[n]||n; }
+function predDates(d){ if(!d) return []; const out=[]; const base=new Date(d+"T00:00:00Z");
+  for(let i=-1;i<=1;i++){ const x=new Date(base); x.setUTCDate(x.getUTCDate()+i); out.push(x.toISOString().slice(0,10)); } return out; }
+let _predResults=null, _predAt=0;
+async function predFetchResults(){
+  if(_predResults && Date.now()-_predAt < 30*60*1000) return _predResults;
+  try{
+    const txt = await fetch("https://raw.githubusercontent.com/martj42/international_results/master/results.csv").then(r=>r.text());
+    const cutoff = new Date(Date.now()-150*24*3600*1000).toISOString().slice(0,10);
+    const map = new Map(); const lines = txt.split(/\r?\n/);
+    for(let i=1;i<lines.length;i++){ const c=lines[i].split(","); if(c.length<5) continue; const date=c[0]; if(date<cutoff) continue;
+      const hs=c[3], as=c[4]; if(hs===""||as===""||hs==="NA"||as==="NA") continue; const hg=parseInt(hs,10), ag=parseInt(as,10);
+      if(!isFinite(hg)||!isFinite(ag)) continue; map.set(predNorm(c[1])+"|"+predNorm(c[2])+"|"+date,{hg,ag}); }
+    _predResults=map; _predAt=Date.now(); return map;
+  }catch(e){ return _predResults; }
+}
+function predFindScore(p, map){ if(!map) return null; const h=predNorm(p.home), a=predNorm(p.away); if(!h||!a) return null;
+  for(const d of predDates(p.date)){ const hit=map.get(h+"|"+a+"|"+d); if(hit) return hit; } return null; }
+const predArgmax = (o)=> !o ? null : (o.home>=o.draw && o.home>=o.away ? "home" : o.draw>=o.away ? "draw" : "away");
+function predBrier(probs, actual){ if(!probs) return null; const y={home:0,draw:0,away:0}; y[actual]=1;
+  return (probs.home-y.home)**2+(probs.draw-y.draw)**2+(probs.away-y.away)**2; }
+function computeScorecard(archive){
+  const tracked = archive.length;
+  const settled = archive.filter(p=>p.result);
+  const n = settled.length;
+  if(n===0) return {tracked, settled:0, pending:tracked, recent:[],
+    message:"Open the UPCOMING tab to log predictions \u2014 they'll be graded here automatically once those matches finish."};
+  let bh=0, mh=0, mkh=0, mkn=0, brM=0, brB=0, brK=0, brKn=0;
+  for(const p of settled){
+    const actual=p.result;
+    if(p.pick===actual) bh++;
+    if(predArgmax(p.model)===actual) mh++;
+    if(p.market){ mkn++; if(predArgmax(p.market)===actual) mkh++; }
+    const bM=predBrier(p.model,actual), bB=predBrier(p.blend,actual), bK=predBrier(p.market,actual);
+    if(bM!=null) brM+=bM; if(bB!=null) brB+=bB; if(bK!=null){ brK+=bK; brKn++; }
+  }
+  const recent = settled.slice().sort((a,b)=>(b.settledAt||0)-(a.settledAt||0)).slice(0,10)
+    .map(p=>({match:`${p.home} v ${p.away}`, pick:p.pick, result:p.result, score:p.score, hit:p.pick===p.result}));
+  const brierMarket = mkn ? brK/brKn : null;
+  const brierBlend = brB/n;
+  return {
+    tracked, settled:n, pending:tracked-n,
+    hit_rate: bh/n,
+    market_favourite_hit_rate: mkn ? mkh/mkn : null,
+    brier: { model: brM/n, blend: brierBlend, market: brierMarket },
+    blend_beats_market: brierMarket!=null && brierBlend < brierMarket,
+    by_competition: { internationals:{settled:n, hit_rate:bh/n}, clubs:{settled:0, hit_rate:null} },
+    recent,
+  };
+}
 
 const st = {
   wrap:{padding:"16px 16px 48px", position:"relative", zIndex:1},
@@ -105,6 +181,46 @@ const STYLE = `
 export default function PredictScreen({ onBack }){
   const [mode, setMode] = useState("upcoming"); // upcoming | best | track | manual
   const TABS = [["upcoming","UPCOMING"],["best","TIPS"],["track","TRACK"],["manual","PICK"]];
+  const [predArchive, setPredArchive] = useState([]);
+
+  useEffect(()=>{ let live=true; loadPredArchive().then(a=>{ if(live) setPredArchive(a); }); return ()=>{live=false;}; },[]);
+
+  // Log the blended predictions currently shown (dedup by event; keep earliest pre-kickoff snapshot).
+  const logPredictions = (matches)=>{
+    setPredArchive(prev=>{
+      const have = new Map(prev.map(p=>[p.id,p]));
+      let changed=false;
+      for(const m of (matches||[])){
+        if(!m.matched || !m.prediction || m.started) continue;
+        const pr=m.prediction; const blend=pr.prediction_1x2||pr.model_1x2; if(!blend) continue;
+        if(have.has(m.event_id)) continue;
+        const pick=predArgmax(blend);
+        have.set(m.event_id, { id:m.event_id, home:m.home, away:m.away, date:(m.kickoff||"").slice(0,10), kickoff:m.kickoff,
+          pick, prob:blend[pick], model:pr.model_1x2, market:pr.market_1x2||null, blend,
+          neutral:!!pr.neutral_venue, loggedAt:Date.now(), result:null, score:null });
+        changed=true;
+      }
+      if(!changed) return prev;
+      const next=[...have.values()]; savePredArchive(next); return next;
+    });
+  };
+
+  // Grade logged predictions whose match has finished (free results feed).
+  const settlePredictions = async ()=>{
+    const map = await predFetchResults(); if(!map) return;
+    setPredArchive(prev=>{
+      let changed=false;
+      const next = prev.map(p=>{
+        if(p.result) return p;
+        const sc=predFindScore(p,map); if(!sc) return p;
+        const actual = sc.hg>sc.ag?"home":sc.ag>sc.hg?"away":"draw";
+        changed=true;
+        return {...p, result:actual, score:`${sc.hg}-${sc.ag}`, settledAt:Date.now()};
+      });
+      if(!changed) return prev;
+      savePredArchive(next); return next;
+    });
+  };
   return (
     <div style={st.wrap}>
       <style>{STYLE}</style>
@@ -129,16 +245,16 @@ export default function PredictScreen({ onBack }){
         })}
       </div>
 
-      {mode==="upcoming" && <UpcomingTab/>}
+      {mode==="upcoming" && <UpcomingTab onLog={logPredictions}/>}
       {mode==="best"     && <BestTipsTab/>}
-      {mode==="track"    && <TrackRecordTab/>}
+      {mode==="track"    && <TrackRecordTab archive={predArchive} onSettle={settlePredictions}/>}
       {mode==="manual"   && <ManualTab/>}
     </div>
   );
 }
 
 /* ═══════════════════ UPCOMING ═══════════════════════════════════ */
-function UpcomingTab(){
+function UpcomingTab({ onLog }){
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -149,7 +265,7 @@ function UpcomingTab(){
     setLoading(true); setErr("");
     fetch(`${API}/api/live/matches?hours=120`)
       .then(r=> r.ok ? r.json() : r.json().then(j=>Promise.reject(new Error(j.detail||"Could not load fixtures."))))
-      .then(d=>{ if(live){ setData(d); } })
+      .then(d=>{ if(live){ setData(d); if(onLog) onLog(d.matches||[]); } })
       .catch(e=>{ if(live) setErr(e.message); })
       .finally(()=>{ if(live) setLoading(false); });
     return ()=>{ live=false; };
@@ -770,23 +886,19 @@ function SectionHead({ title, hint, col }){
 
 /* ═══════════════════ TRACK RECORD ════════════════════════════════ */
 /* Live scorecard: how the predictions are actually doing vs results & market */
-function TrackRecordTab(){
-  const [sc, setSc] = useState(null);
-  const [err, setErr] = useState("");
+function TrackRecordTab({ archive, onSettle }){
+  const [settling, setSettling] = useState(true);
 
   useEffect(()=>{
     let live=true;
-    fetch(`${API}/api/live/scorecard`)
-      .then(r=> r.ok ? r.json() : r.json().then(j=>Promise.reject(new Error(j.detail||"Could not load the scorecard."))))
-      .then(d=>{ if(live) setSc(d); })
-      .catch(e=>{ if(live) setErr(e.message); });
+    Promise.resolve(onSettle && onSettle()).finally(()=>{ if(live) setSettling(false); });
     return ()=>{ live=false; };
   },[]);
 
-  if(err) return <div style={st.notice}>{err}</div>;
-  if(sc===null) return (
+  const sc = computeScorecard(archive||[]);
+  if(settling && (archive||[]).length===0) return (
     <div style={{textAlign:"center", padding:"40px 0", fontFamily:mono, fontSize:11, color:C.soft}}>
-      <span className="rl-spin"/>  Loading the track record…
+      <span className="rl-spin"/>  Checking results…
     </div>
   );
 
