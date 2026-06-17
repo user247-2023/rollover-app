@@ -89,11 +89,17 @@ export default async function handler(req, res) {
     var p = "Professional football value betting analyst. Date: " + today + ".\n\n"
       + "REAL MATCHES TODAY:\n" + list + "\n\n"
       + "Analyse using: form, H2H, injuries, motivation, xG, tactics, home/away stats, corners/cards averages.\n"
-      + "Markets allowed: Over/Under 1.5/2.5/3.5/4.5 Goals | BTTS Yes/No | 1st/2nd Half Over 0.5/1.5 | Corners 8.5-11.5 | Cards 3.5-5.5 | Clean Sheet\n"
-      + "FORBIDDEN: match winner, double chance, correct score, goalscorer.\n"
-      + "Generate 20 tips. Variety of markets AND leagues.\n"
+      + "MARKETS ALLOWED:\n"
+      + "RESULT: Match Result (Home/Draw/Away) | Double Chance (1X/12/X2) | Draw No Bet\n"
+      + "GOALS: Over/Under 0.5/1.5/2.5/3.5/4.5 Goals | BTTS Yes/No | Win to Nil | Odd/Even Total Goals | Clean Sheet | Correct Score | Team Over/Under Goals\n"
+      + "HALVES: 1st/2nd Half Over 0.5/1.5 | Both Halves Over 0.5 | HT/FT\n"
+      + "STATS & SPECIALS: Over/Under 8.5-12.5 Corners | Over/Under 3.5-6.5 Cards | Over/Under Throw-ins | Total Shots | Fouls | Offsides\n"
+      + "FORBIDDEN: individual goalscorer, player props, asian handicap with .25/.75 lines.\n"
+      + "NOTE: throw-ins/shots/fouls/offsides have little reliable data - only when truly confident; flagged experimental.\n"
+      + "Also include settlement fields on every tip: home_team, away_team, and settle_type (one of goals_ou, btts, result, double_chance, dnb, win_to_nil, odd_even, clean_sheet, correct_score, team_goals, manual - use manual for corners/cards/halves/throw-ins/shots/fouls/offsides), line (number or null), side (over/under, yes/no, home/draw/away, 1x/12/x2, odd/even, or null).\n"
+      + "Generate up to 30 tips. Variety of markets AND leagues.\n"
       + "Return ONLY JSON array. Start [ end ]. No markdown.\n"
-      + '[{"match":"Team A vs Team B","league":"League (Country)","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","odds_range":"1.80-2.00","confidence":84,"reasoning":"3-4 sentence stats-based reason.","key_stats":["s1","s2","s3","s4"],"risk":"LOW"}]';
+      + '[{"match":"Team A vs Team B","home_team":"Team A","away_team":"Team B","league":"League (Country)","time":"HH:MM GMT","market":"Over/Under 2.5 Goals","pick":"Over 2.5 Goals","settle_type":"goals_ou","line":2.5,"side":"over","odds_range":"1.80-2.00","confidence":84,"reasoning":"3-4 sentence stats-based reason.","key_stats":["s1","s2","s3","s4"],"risk":"LOW"}]';
 
     // Call all 3 AIs in parallel
     var results = await Promise.all([callClaude(CK,p), callGemini(GK,p), callGroq(QK,p)]);
@@ -204,6 +210,8 @@ function extract(raw, name) {
       reasoning:t.reasoning||t.analysis||t.reason||"",
       key_stats:t.key_stats||t.stats||[],
       risk:t.risk||(parseInt(t.confidence)>=80?"LOW":parseInt(t.confidence)>=65?"MEDIUM":"HIGH"),
+      home_team:t.home_team||"", away_team:t.away_team||"",
+      settle_type:t.settle_type||"manual", line:(t.line!=null?t.line:null), side:t.side||null,
       id:Math.random().toString(36).substr(2,8),
       ais:[name],votes:1,confs:[parseInt(t.confidence)||72],
       generatedAt:Date.now(),
