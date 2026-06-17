@@ -48,6 +48,114 @@ function calcWD(AB, day, lastWD, crossed, wdPct) {
   return {wd, reasons};
 }
 
+/* ═══════════ AUTO-SETTLE — grade goals-family tips from free results ════════
+   Reads the public international-results feed (CORS-open) and auto-marks each
+   pending GOALS-based tip Won/Lost once its match has a final score. Corners,
+   cards, halves and throw-ins have no free result data, so they stay manual. */
+const RESULTS_CSV_URL = "https://raw.githubusercontent.com/martj42/international_results/master/results.csv";
+const TEAM_ALIASES = {
+  korearepublic:"southkorea", southkorea:"southkorea", koreadpr:"northkorea",
+  usa:"unitedstates", unitedstatesofamerica:"unitedstates", unitedstates:"unitedstates",
+  czechia:"czechrepublic", czechrepublic:"czechrepublic",
+  turkiye:"turkey", turkey:"turkey", iran:"iran",
+  ivorycoast:"ivorycoast", cotedivoire:"ivorycoast",
+  drcongo:"drcongo", congodr:"drcongo",
+  capeverde:"capeverde", caboverde:"capeverde",
+  china:"chinapr", chinapr:"chinapr",
+  bosnia:"bosniaandherzegovina", bosniaandherzegovina:"bosniaandherzegovina",
+  uae:"unitedarabemirates", unitedarabemirates:"unitedarabemirates",
+  northmacedonia:"northmacedonia", macedonia:"northmacedonia",
+  republicofireland:"republicofireland", ireland:"republicofireland",
+  curacao:"curacao",
+};
+function normTeam(x){
+  let n=(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
+  return TEAM_ALIASES[n]||n;
+}
+function _datesAround(d){
+  if(!d) return [];
+  const out=[]; const base=new Date(d+"T00:00:00Z");
+  for(let i=-1;i<=1;i++){ const x=new Date(base); x.setUTCDate(x.getUTCDate()+i); out.push(x.toISOString().slice(0,10)); }
+  return out;
+}
+let _resultsCache=null, _resultsAt=0;
+async function fetchResults(){
+  if(_resultsCache && Date.now()-_resultsAt < 30*60*1000) return _resultsCache;
+  try{
+    const txt = await fetch(RESULTS_CSV_URL).then(r=>r.text());
+    const cutoff = new Date(Date.now()-150*24*3600*1000).toISOString().slice(0,10);
+    const map = new Map();
+    const lines = txt.split(/\r?\n/);
+    for(let i=1;i<lines.length;i++){
+      const c = lines[i].split(",");
+      if(c.length<5) continue;
+      const date=c[0]; if(date<cutoff) continue;
+      const hs=c[3], as=c[4];
+      if(hs===""||as===""||hs==="NA"||as==="NA") continue;
+      const hg=parseInt(hs,10), ag=parseInt(as,10);
+      if(!isFinite(hg)||!isFinite(ag)) continue;
+      map.set(normTeam(c[1])+"|"+normTeam(c[2])+"|"+date, {hg,ag});
+    }
+    _resultsCache=map; _resultsAt=Date.now();
+    return map;
+  }catch(e){ return _resultsCache; }
+}
+function findResult(tip, map){
+  if(!map) return null;
+  const parts=(tip.match||"").split(/\s+vs\s+|\s+v\s+/i);
+  const h=normTeam(tip.home_team || parts[0]);
+  const a=normTeam(tip.away_team || parts[1]);
+  if(!h||!a) return null;
+  for(const d of _datesAround(tip.date)){
+    const hit=map.get(h+"|"+a+"|"+d);
+    if(hit) return hit;
+  }
+  return null;
+}
+function gradeTip(tip, sc){
+  const hg=sc.hg, ag=sc.ag, total=hg+ag;
+  const stype=(tip.settle_type||"").toLowerCase();
+  const side=(tip.side||"").toLowerCase();
+  const pickL=(tip.pick||"").toLowerCase();
+  const W=b=>b?"WIN":"LOSS";
+  let line = tip.line!=null ? parseFloat(tip.line) : null;
+  if(line==null){ const m=pickL.match(/(\d+(?:\.\d)?)/); if(m) line=parseFloat(m[1]); }
+  const actual = hg>ag?"home":ag>hg?"away":"draw";
+
+  if(stype==="goals_ou" || (!stype && /goal/.test(pickL) && /(over|under)/.test(pickL))){
+    if(line==null) return null;
+    const over = side ? side==="over" : /over/.test(pickL);
+    if(total===line) return null;
+    return W(over ? total>line : total<line);
+  }
+  if(stype==="btts" || (!stype && /(btts|both teams)/.test(pickL))){
+    const yes = side ? side==="yes" : !/\bno\b/.test(pickL);
+    return W(yes ? (hg>0&&ag>0) : !(hg>0&&ag>0));
+  }
+  if(stype==="result"){ return side ? W(side===actual) : null; }
+  if(stype==="double_chance"){
+    const dc={"1x":["home","draw"],"12":["home","away"],"x2":["draw","away"]};
+    return dc[side] ? W(dc[side].includes(actual)) : null;
+  }
+  if(stype==="dnb"){ if(actual==="draw") return null; return side?W(side===actual):null; }
+  if(stype==="win_to_nil"){
+    if(side==="home") return W(hg>ag && ag===0);
+    if(side==="away") return W(ag>hg && hg===0);
+    return null;
+  }
+  if(stype==="odd_even"){ const odd=total%2===1; return side?W(side==="odd"?odd:!odd):null; }
+  if(stype==="clean_sheet"){
+    if(side==="home"||/home/.test(pickL)) return W(ag===0);
+    if(side==="away"||/away/.test(pickL)) return W(hg===0);
+    return null;
+  }
+  if(stype==="correct_score"){
+    const m=pickL.match(/(\d+)\s*[-:x]\s*(\d+)/);
+    return m ? W(parseInt(m[1],10)===hg && parseInt(m[2],10)===ag) : null;
+  }
+  return null; // team_goals, halves, corners, cards, throw-ins, manual → stay manual
+}
+
 const TSH_TO_USD = 2650; // 1 USD ≈ 2650 TSH
 
 function fmtDual(tsh) {
@@ -324,6 +432,34 @@ export default function App() {
     await persist({...allPlans, [active]:{plan, state:{...st, tipResults}}});
     showToast("Removed from tracker", "info");
   };
+
+  // Auto-grade pending goals-family tips from the free results feed.
+  const autoSettlePending = async (planId) => {
+    const entry = allPlans[planId]; if(!entry) return;
+    const st = entry.state || {};
+    const hasPending = (st.tipResults||[]).some(r=>r.result==="PENDING" && !r.autoResult);
+    if(!hasPending) return;
+    const map = await fetchResults(); if(!map) return;
+    let changed=false;
+    const tipResults=(st.tipResults||[]).map(r=>{
+      if(r.result!=="PENDING" || r.autoResult) return r;
+      const sc=findResult(r,map); if(!sc) return r;
+      const g=gradeTip(r,sc); if(!g) return r;
+      changed=true;
+      return {...r, autoResult:g, autoScore:`${sc.hg}-${sc.ag}`, autoSettledAt:Date.now()};
+    });
+    if(changed){
+      await persist({...allPlans, [planId]:{plan:entry.plan, state:{...st, tipResults}}});
+      showToast("✦ Tip results auto-updated", "win");
+    }
+  };
+
+  useEffect(()=>{
+    if(view==="plan" && tab==="RESULTS" && active && allPlans[active]){
+      autoSettlePending(active);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[view, tab, active]);
 
   const logBet = async (result) => {
     const {plan, state:st} = allPlans[active];
@@ -887,6 +1023,16 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove}) {
   const all = (st.tipResults||[]);
   const pending = all.filter(r=>r.result==="PENDING").slice().reverse();
   const results = all.filter(r=>r.result==="WIN"||r.result==="LOSS").slice().reverse();
+
+  // Auto-graded accuracy = settled outcomes + pending tips already graded
+  const gradedOutcomes = [
+    ...results.map(r=>r.result),
+    ...pending.filter(p=>p.autoResult).map(p=>p.autoResult),
+  ];
+  const gradedWins = gradedOutcomes.filter(o=>o==="WIN").length;
+  const gradedTotal = gradedOutcomes.length;
+  const tipAccuracy = gradedTotal ? Math.round(gradedWins/gradedTotal*100) : null;
+  const autoPendingCount = pending.filter(p=>p.autoResult).length;
   const wins = results.filter(r=>r.result==="WIN");
   const losses = results.filter(r=>r.result==="LOSS");
   const totalProfit = results.reduce((s,r)=>s+r.profitTSH,0);
@@ -968,6 +1114,22 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove}) {
       </div>
 
       {/* Pending tips pulled from GET TIPS — settle after each match */}
+      {/* Auto-graded tip accuracy — results caught automatically */}
+      {gradedTotal>0 && (
+        <div style={{...S.glassCard, border:"1px solid #00E5FF33",
+          background:"linear-gradient(135deg,#00E5FF0a,transparent)", marginBottom:10,
+          display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+          <div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#00E5FF99",letterSpacing:2,marginBottom:4}}>TIP ACCURACY · AUTO-GRADED</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>
+              {gradedWins}W · {gradedTotal-gradedWins}L · {gradedTotal} graded{autoPendingCount>0?` · ${autoPendingCount} pending`:""}
+            </div>
+          </div>
+          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:26,
+            color: tipAccuracy>=55?"#69FF47":tipAccuracy>=45?"#FFD600":"#FF1744"}}>{tipAccuracy}%</div>
+        </div>
+      )}
+
       {pending.length>0 && (
         <div style={{...S.glassCard, border:"1px solid #FFD60044",
           background:"linear-gradient(135deg,#FFD60008,transparent)", marginBottom:10}}>
@@ -1382,7 +1544,10 @@ function SetupScreen({presetId,onSetup,onBack}) {
 const MARKET_COLORS = {
   "Over": "#69FF47", "Under": "#00E5FF", "BTTS": "#E040FB",
   "Both": "#E040FB", "First": "#FFD600", "Asian": "#FF6D00",
-  "Total": "#FF6D00", "Either": "#E040FB"
+  "Total": "#FF6D00", "Either": "#E040FB",
+  "Corners": "#FF6D00", "Cards": "#FF1744", "Fouls": "#FF8A65",
+  "Offsides": "#40C4FF", "Shots": "#FFD600", "Throw": "#B388FF",
+  "Highest": "#FFD600", "Clean": "#69FF47"
 };
 function marketColor(market) {
   const key = Object.keys(MARKET_COLORS).find(k => market?.startsWith(k));
@@ -1434,7 +1599,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
     setLoading(false);
   };
 
-  const FILTERS = ["ALL","🔥 CONFIRMED","LOW RISK","OVER GOALS","UNDER GOALS","BTTS","CORNERS","CARDS","1ST HALF"];
+  const FILTERS = ["ALL","🔥 CONFIRMED","LOW RISK","OVER GOALS","UNDER GOALS","BTTS","CORNERS","CARDS","FOULS","OFFSIDES","SHOTS","THROW-INS","ODD/EVEN","HALVES","1ST HALF"];
   const filtered = tips.filter(t => {
     if(filter==="ALL") return true;
     if(filter==="🔥 CONFIRMED")  return t.confirmed || t.multiAI;
@@ -1445,6 +1610,12 @@ function TipsTab({ plan, st, preset, onTrack }) {
     if(filter==="CORNERS")       return (t.market||"").toUpperCase().includes("CORNER");
     if(filter==="CARDS")         return (t.market||"").toUpperCase().includes("CARD");
     if(filter==="1ST HALF")      return (t.market||"").toUpperCase().includes("FIRST HALF") || (t.market||"").toUpperCase().includes("1ST HALF");
+    if(filter==="FOULS")         return (t.market||"").toUpperCase().includes("FOUL");
+    if(filter==="OFFSIDES")      return (t.market||"").toUpperCase().includes("OFFSIDE");
+    if(filter==="SHOTS")         return (t.market||"").toUpperCase().includes("SHOT");
+    if(filter==="THROW-INS")     return (t.market||"").toUpperCase().includes("THROW");
+    if(filter==="ODD/EVEN")      return (t.market||"").toUpperCase().includes("ODD") || (t.market||"").toUpperCase().includes("EVEN");
+    if(filter==="HALVES")        return (t.market||"").toUpperCase().includes("HIGHEST");
     return true;
   });
 
@@ -1926,9 +2097,21 @@ function PendingTipRow({ tip, preset, onSettle, onRemove }){
   const s = parseFloat(stake);
   const valid = isFinite(s) && s > 0;
   const odds = tip.odds || 1.85;
+  const auto = tip.autoResult; // "WIN" | "LOSS" | undefined
+  const autoCol = auto==="WIN" ? "#69FF47" : "#FF1744";
   return (
-    <div style={{background:"#ffffff05",border:"1px solid #ffffff10",borderRadius:10,
+    <div style={{background: auto?`${autoCol}0c`:"#ffffff05",
+      border:`1px solid ${auto?autoCol+"44":"#ffffff10"}`,borderRadius:10,
       padding:"11px 12px",marginBottom:8}}>
+      {auto && (
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,
+          padding:"7px 10px",borderRadius:8,background:`${autoCol}14`,border:`1px solid ${autoCol}33`}}>
+          <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:autoCol}}>
+            {auto==="WIN"?"✓ TIP WON":"✕ TIP LOST"}{tip.autoScore?` · ${tip.autoScore}`:""}
+          </span>
+          <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff66",marginLeft:"auto"}}>auto-graded</span>
+        </div>
+      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:"#fff",
@@ -1952,13 +2135,20 @@ function PendingTipRow({ tip, preset, onSettle, onRemove }){
           style={{padding:"9px 14px",borderRadius:9,border:"none",cursor:valid?"pointer":"not-allowed",
             fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
             background:valid?"linear-gradient(135deg,#69FF47,#00C853)":"#ffffff08",
-            color:valid?"#001a00":"#ffffff33"}}>WIN</button>
+            color:valid?"#001a00":"#ffffff33",
+            boxShadow: auto==="WIN" ? "0 0 0 2px #69FF4799" : "none"}}>WIN</button>
         <button disabled={!valid} onClick={()=>onSettle(tip.id,"LOSS",stake)}
           style={{padding:"9px 14px",borderRadius:9,border:"none",cursor:valid?"pointer":"not-allowed",
             fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
             background:valid?"linear-gradient(135deg,#FF1744,#B71C1C)":"#ffffff08",
-            color:valid?"#fff":"#ffffff33"}}>LOSS</button>
+            color:valid?"#fff":"#ffffff33",
+            boxShadow: auto==="LOSS" ? "0 0 0 2px #FF174499" : "none"}}>LOSS</button>
       </div>
+      {auto && !valid && (
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8.5,color:"#ffffff66",marginTop:8}}>
+          Result is already in your accuracy. Add your stake to log the P&L too.
+        </div>
+      )}
       {valid && (
         <div style={{fontFamily:"'DM Mono',monospace",fontSize:8.5,color:"#ffffff44",marginTop:8}}>
           Win → +{fmt(s*(odds-1), tip.currency)} · Loss → −{fmt(s, tip.currency)}
