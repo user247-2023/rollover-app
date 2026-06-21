@@ -11,11 +11,11 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 ═══════════════════════════════════════════════════════════════════ */
 const API = "https://web-production-6371a.up.railway.app";
 
-const mono = "'DM Mono',monospace";
-const orb  = "'Orbitron',monospace";
+const mono = "'Inter',sans-serif";
+const orb  = "'Space Grotesk',sans-serif";
 const C = {
-  cyan:"#00E5FF", green:"#69FF47", red:"#FF5470", yellow:"#FFD600", gold:"#FFB300",
-  mute:"#ffffff40", dim:"#ffffff9c", soft:"#ffffff66", line:"#ffffff14", panel:"#ffffff06",
+  cyan:"#2F37D9", green:"#159A56", red:"#DC3B3B", yellow:"#E08A00", gold:"#E08A00",
+  mute:"rgba(var(--ink-rgb),0.251)", dim:"rgba(var(--ink-rgb),0.612)", soft:"rgba(var(--ink-rgb),0.4)", line:"rgba(var(--ink-rgb),0.078)", panel:"var(--surface)",
 };
 
 const short = (n)=> n ? n.replace(/\s+FC$/,"").replace(/\s+(AFC|CF)$/,"") : n;
@@ -116,27 +116,27 @@ function computeScorecard(archive){
 
 const st = {
   wrap:{padding:"16px 16px 48px", position:"relative", zIndex:1},
-  back:{background:"none",border:"none",color:"#00E5FF99",fontFamily:mono,fontSize:11,
+  back:{background:"none",border:"none",color:"#2F37D999",fontFamily:mono,fontSize:11,
     cursor:"pointer",padding:"4px 0",letterSpacing:2},
-  title:{fontFamily:orb, fontWeight:900, fontSize:18, color:"#fff", letterSpacing:2, marginTop:10},
-  titleGlow:{color:C.cyan, textShadow:"0 0 18px #00E5FF55"},
+  title:{fontFamily:orb, fontWeight:900, fontSize:18, color:"var(--ink)", letterSpacing:2, marginTop:10},
+  titleGlow:{color:C.cyan, textShadow:"0 0 18px #2F37D955"},
   sub:{fontFamily:mono, fontSize:9, color:C.soft, letterSpacing:2, marginBottom:16},
   label:{fontFamily:mono, fontSize:8, color:C.soft, letterSpacing:2, marginBottom:6, display:"block"},
   card:{background:C.panel, border:`1px solid ${C.line}`, borderRadius:16, padding:16, marginBottom:14},
-  select:{width:"100%", background:"#0a1119", border:"1px solid #ffffff1f", borderRadius:10,
-    padding:"12px", color:"#fff", fontFamily:mono, fontSize:13, WebkitAppearance:"none", appearance:"none"},
-  input:{width:"100%", background:"#ffffff05", border:"1px solid #ffffff15", borderRadius:10,
-    padding:"11px", color:"#fff", fontFamily:mono, fontSize:13},
+  select:{width:"100%", background:"var(--surface)", border:"1px solid rgba(var(--ink-rgb),0.122)", borderRadius:10,
+    padding:"12px", color:"var(--ink)", fontFamily:mono, fontSize:13, WebkitAppearance:"none", appearance:"none"},
+  input:{width:"100%", background:"rgba(var(--ink-rgb),0.02)", border:"1px solid rgba(var(--ink-rgb),0.082)", borderRadius:10,
+    padding:"11px", color:"var(--ink)", fontFamily:mono, fontSize:13},
   btn:{width:"100%", padding:"14px", borderRadius:12, border:"none", cursor:"pointer",
     fontFamily:orb, fontWeight:700, fontSize:13, letterSpacing:1,
-    background:"linear-gradient(135deg,#00E5FF,#00B8D4)", color:"#001318", marginTop:14},
+    background:"linear-gradient(135deg,#2F37D9,#1E25B8)", color:"#FFFFFF", marginTop:14},
   seg:{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
     fontFamily:orb, fontWeight:700, fontSize:13, minWidth:0},
-  tile:{background:"#ffffff05", border:"1px solid #ffffff10", borderRadius:12, padding:"11px 8px", textAlign:"center"},
+  tile:{background:"rgba(var(--ink-rgb),0.02)", border:"1px solid rgba(var(--ink-rgb),0.063)", borderRadius:12, padding:"11px 8px", textAlign:"center"},
   tk:{fontFamily:mono, fontSize:7.5, color:C.soft, letterSpacing:1, marginBottom:5},
-  tv:{fontFamily:orb, fontWeight:700, fontSize:16, color:"#fff"},
+  tv:{fontFamily:orb, fontWeight:700, fontSize:16, color:"var(--ink)"},
   notice:{fontFamily:mono, fontSize:11, lineHeight:1.6, padding:12, borderRadius:10,
-    border:"1px solid #FF547033", background:"#FF547010", color:"#FF8A9C"},
+    border:"1px solid #DC3B3B33", background:"#DC3B3B10", color:"#B0302F"},
   chip:(col)=>({fontFamily:orb, fontWeight:700, fontSize:8, letterSpacing:1, padding:"3px 9px",
     borderRadius:99, color:col, border:`1px solid ${col}55`, background:`${col}16`, whiteSpace:"nowrap"}),
   badge:(col)=>({fontFamily:orb, fontWeight:700, fontSize:8, letterSpacing:1, padding:"3px 8px",
@@ -167,10 +167,10 @@ const STYLE = `
 .rl-bar{transform-origin:left center;animation:barGrow .65s cubic-bezier(.2,.8,.2,1) both}
 .rl-exp{animation:expandIn .3s ease both}
 .rl-press{transition:border-color .2s ease, background .2s ease, box-shadow .2s ease}
-.rl-press:hover{border-color:#00E5FF44 !important; box-shadow:0 6px 28px #00000040}
-.rl-skel{background:linear-gradient(90deg,#ffffff08 25%,#ffffff14 37%,#ffffff08 63%);
+.rl-press:hover{border-color:#2F37D944 !important; box-shadow:0 6px 28px #00000040}
+.rl-skel{background:linear-gradient(90deg,rgba(var(--ink-rgb),0.031) 25%,rgba(var(--ink-rgb),0.078) 37%,rgba(var(--ink-rgb),0.031) 63%);
   background-size:200% 100%;animation:shimmer 1.4s infinite}
-.rl-spin{width:15px;height:15px;border:2px solid #ffffff22;border-top-color:#00E5FF;border-radius:50%;
+.rl-spin{width:15px;height:15px;border:2px solid rgba(var(--ink-rgb),0.133);border-top-color:#2F37D9;border-radius:50%;
   display:inline-block;animation:spin .8s linear infinite;vertical-align:-3px}
 .rl-tab{flex:1;padding:11px 8px;border:none;cursor:pointer;font-family:${orb};font-weight:700;
   font-size:11px;letter-spacing:1.5;border-radius:10px;transition:all .25s ease}
@@ -230,15 +230,15 @@ export default function PredictScreen({ onBack }){
       <div style={st.sub}>MODEL · MARKET · BLENDED VERDICT</div>
 
       {/* mode toggle */}
-      <div style={{display:"flex", gap:5, background:"#ffffff06", border:`1px solid ${C.line}`,
+      <div style={{display:"flex", gap:5, background:"rgba(var(--ink-rgb),0.024)", border:`1px solid ${C.line}`,
         borderRadius:13, padding:5, marginBottom:18}}>
         {TABS.map(([id,label])=>{
           const on = mode===id;
           return (
             <button key={id} className="rl-tab" onClick={()=>setMode(id)}
               style={{fontSize:9.5, letterSpacing:0.5, padding:"11px 4px", whiteSpace:"nowrap",
-                background: on?"linear-gradient(135deg,#00E5FF,#00B8D4)":"transparent",
-                color: on?"#001318":C.soft, boxShadow: on?"0 0 16px #00E5FF44":"none"}}>
+                background: on?"linear-gradient(135deg,#2F37D9,#1E25B8)":"transparent",
+                color: on?"#FFFFFF":C.soft, boxShadow: on?"0 0 16px #2F37D944":"none"}}>
               {label}
             </button>
           );
@@ -280,7 +280,7 @@ function UpcomingTab({ onLog }){
   if(matches.length===0){
     return (
       <div style={{...st.card, textAlign:"center", padding:"30px 16px"}}>
-        <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"#fff", marginBottom:8}}>NO UPCOMING MATCHES</div>
+        <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"var(--ink)", marginBottom:8}}>NO UPCOMING MATCHES</div>
         <div style={{fontFamily:mono, fontSize:11, color:C.dim, lineHeight:1.7}}>
           Nothing in the next few days yet. Knockout fixtures appear here once the draw is set.
         </div>
@@ -347,14 +347,14 @@ function MatchCard({ m, hero, idx, bankroll }){
   return (
     <div className="rl-card rl-press" onClick={()=> matched && setOpen(o=>!o)}
       style={{...st.card, marginBottom:14, cursor: matched?"pointer":"default",
-        borderColor: hero ? "#00E5FF33" : C.line, animationDelay:`${Math.min(idx,8)*0.05}s`,
-        background: hero ? "linear-gradient(180deg,#00E5FF0c,transparent 60%)" : C.panel}}>
+        borderColor: hero ? "#2F37D933" : C.line, animationDelay:`${Math.min(idx,8)*0.05}s`,
+        background: hero ? "linear-gradient(180deg,#2F37D90c,transparent 60%)" : C.panel}}>
 
       {/* header row */}
       <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10}}>
         <div style={{minWidth:0}}>
           {hero && <div style={{fontFamily:mono, fontSize:8, color:C.cyan, letterSpacing:3, marginBottom:6}}>NEXT UP</div>}
-          <div style={{fontFamily:orb, fontWeight:700, fontSize: hero?17:15, color:"#fff", lineHeight:1.25}}>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize: hero?17:15, color:"var(--ink)", lineHeight:1.25}}>
             {short(m.home)} <span style={{color:C.mute, fontWeight:400}}>v</span> {short(m.away)}
           </div>
           <div style={{display:"flex", alignItems:"center", gap:6, marginTop:7, flexWrap:"wrap"}}>
@@ -380,7 +380,7 @@ function MatchCard({ m, hero, idx, bankroll }){
             background:`linear-gradient(135deg,${cCol}14,transparent)`, border:`1px solid ${cCol}33`}}>
             <div style={{minWidth:0}}>
               <div style={{fontFamily:mono, fontSize:8, color:C.soft, letterSpacing:2, marginBottom:3}}>OUR CALL</div>
-              <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+              <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
                 {tipTeamLabel(tip, m)}
               </div>
             </div>
@@ -399,10 +399,10 @@ function MatchCard({ m, hero, idx, bankroll }){
           {/* double chance tip */}
           {dcTip && (
             <div style={{display:"flex", alignItems:"center", gap:8, marginTop:12, padding:"9px 12px",
-              borderRadius:11, background:"#FFB30010", border:"1px solid #FFB30033"}}>
+              borderRadius:11, background:"#E08A0010", border:"1px solid #E08A0033"}}>
               {Icon.spark()}
               <div style={{fontFamily:mono, fontSize:10.5, color:C.dim, flex:1}}>
-                <b style={{color:"#fff"}}>Safest:</b> {dcTip.label}
+                <b style={{color:"var(--ink)"}}>Safest:</b> {dcTip.label}
               </div>
               <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:C.gold}}>{pc(dcTip.prob)}</div>
               <div style={{fontFamily:mono, fontSize:9, color:C.soft}}>fair {dec(dcTip.fair_odds)}</div>
@@ -433,11 +433,11 @@ function ProbBar({ probs }){
   return (
     <div className="rl-bar" style={{display:"flex", height:42, borderRadius:11, overflow:"hidden",
       border:`1px solid ${C.line}`, marginTop:13}}>
-      <div style={{...st.seg, flexGrow:h, background:"linear-gradient(135deg,#69FF47,#34D399)", color:"#052b00"}}>
+      <div style={{...st.seg, flexGrow:h, background:"linear-gradient(135deg,#159A56,#34D399)", color:"#052b00"}}>
         {pc(h)}<span style={{fontSize:7.5,fontWeight:500}}>HOME</span></div>
-      <div style={{...st.seg, flexGrow:d, background:"#2b3547", color:"#fff"}}>
+      <div style={{...st.seg, flexGrow:d, background:"#2b3547", color:"var(--ink)"}}>
         {pc(d)}<span style={{fontSize:7.5,fontWeight:500,opacity:.7}}>DRAW</span></div>
-      <div style={{...st.seg, flexGrow:a, background:"linear-gradient(135deg,#FF5470,#FB7185)", color:"#2b0008"}}>
+      <div style={{...st.seg, flexGrow:a, background:"linear-gradient(135deg,#DC3B3B,#FB7185)", color:"#2b0008"}}>
         {pc(a)}<span style={{fontSize:7.5,fontWeight:500}}>AWAY</span></div>
     </div>
   );
@@ -453,8 +453,8 @@ function Divergence({ model, market, pick }){
   return (
     <div style={{display:"flex", alignItems:"center", gap:12, marginTop:11, fontFamily:mono, fontSize:10, color:C.soft}}>
       <span style={{letterSpacing:1, fontSize:8, color:C.mute}}>{sideName.toUpperCase()}</span>
-      <span>Model <b style={{color:"#fff"}}>{pc(mod)}</b></span>
-      <span>Market <b style={{color:"#fff"}}>{pc(mkt)}</b></span>
+      <span>Model <b style={{color:"var(--ink)"}}>{pc(mod)}</b></span>
+      <span>Market <b style={{color:"var(--ink)"}}>{pc(mkt)}</b></span>
       <span style={{marginLeft:"auto", color:eCol, fontFamily:orb, fontWeight:700, fontSize:11}}>
         {edge>0?"+":""}{Math.round(edge*100)}%
       </span>
@@ -505,7 +505,7 @@ function ValueVerdict({ eventId, bankroll }){
       </div>
       {value.length>0 ? value.map((b,i)=><BetRow key={i} b={b}/>) : (
         <div style={{textAlign:"center", padding:"14px 8px", fontFamily:mono, fontSize:10.5, color:C.dim, lineHeight:1.6}}>
-          <div style={{fontFamily:orb, fontSize:12, color:"#fff", marginBottom:5}}>NO EDGE RIGHT NOW</div>
+          <div style={{fontFamily:orb, fontSize:12, color:"var(--ink)", marginBottom:5}}>NO EDGE RIGHT NOW</div>
           The market’s prices match the model here. That’s the system being honest, not a fault.
         </div>
       )}
@@ -641,7 +641,7 @@ function ManualTab(){
           <div style={{animation:"fadeUp .4s ease"}}>
             <div style={st.card}>
               <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", flexWrap:"wrap"}}>
-                <div style={{fontFamily:orb, fontWeight:700, fontSize:15, color:"#fff"}}>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:15, color:"var(--ink)"}}>
                   {short(home)} <span style={{color:C.mute}}>v</span> {short(away)}
                 </div>
                 <div style={{fontFamily:mono, fontSize:11, color:C.soft}}>xG {eg.home.toFixed(2)} – {eg.away.toFixed(2)}</div>
@@ -654,10 +654,10 @@ function ManualTab(){
                 <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:12}}>
                   <div style={{padding:"10px 12px", borderRadius:11, background:`${cCol}12`, border:`1px solid ${cCol}33`}}>
                     <div style={{fontFamily:mono, fontSize:8, color:C.soft, letterSpacing:1, marginBottom:4}}>RESULT TIP · {rTip.confidence.toUpperCase()}</div>
-                    <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:"#fff"}}>{rTip.label} · {pc(rTip.prob)}</div>
+                    <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:"var(--ink)"}}>{rTip.label} · {pc(rTip.prob)}</div>
                   </div>
                   {dTip && (
-                    <div style={{padding:"10px 12px", borderRadius:11, background:"#FFB30012", border:"1px solid #FFB30033"}}>
+                    <div style={{padding:"10px 12px", borderRadius:11, background:"#E08A0012", border:"1px solid #E08A0033"}}>
                       <div style={{fontFamily:mono, fontSize:8, color:C.soft, letterSpacing:1, marginBottom:4}}>DOUBLE CHANCE</div>
                       <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:C.gold}}>{dTip.label} · {pc(dTip.prob)}</div>
                     </div>
@@ -675,8 +675,8 @@ function ManualTab(){
               <div style={{display:"flex", gap:7, flexWrap:"wrap"}}>
                 {sc.map((s,i)=>(
                   <div key={i} style={{flex:1, minWidth:60, textAlign:"center", padding:"8px 4px", borderRadius:10,
-                    border:`1px solid ${i===0?C.cyan:"#ffffff10"}`, background:i===0?"#00E5FF12":"#ffffff05"}}>
-                    <div style={{fontFamily:mono, fontSize:15, color:"#fff", fontWeight:500}}>{s.home}–{s.away}</div>
+                    border:`1px solid ${i===0?C.cyan:"rgba(var(--ink-rgb),0.063)"}`, background:i===0?"#2F37D912":"rgba(var(--ink-rgb),0.02)"}}>
+                    <div style={{fontFamily:mono, fontSize:15, color:"var(--ink)", fontWeight:500}}>{s.home}–{s.away}</div>
                     <div style={{fontFamily:mono, fontSize:9, color:C.soft, marginTop:2}}>{pc1(s.prob)}</div>
                   </div>
                 ))}
@@ -714,7 +714,7 @@ function ManualTab(){
               <label style={st.label}>YOUR BANKROLL (OPTIONAL, TSH)</label>
               <input style={st.input} inputMode="numeric" placeholder="100000" value={bankroll} onChange={e=>setBankroll(e.target.value)}/>
 
-              <button style={{...st.btn, background:"linear-gradient(135deg,#FFD600,#FF8F00)", color:"#1a1400",
+              <button style={{...st.btn, background:"linear-gradient(135deg,#E08A00,#FF8F00)", color:"#1a1400",
                 opacity:vLoading?0.6:1}} onClick={checkValue} disabled={vLoading}>
                 {vLoading ? "CHECKING…" : "CHECK FOR VALUE"}
               </button>
@@ -734,10 +734,10 @@ function BetRow({ b }){
   const isVal = b.is_value;
   const tierCol = b.risk_tier==="low" ? C.green : b.risk_tier==="medium" ? C.yellow : C.red;
   return (
-    <div style={{border:`1px solid ${isVal?C.green+"66":"#ffffff10"}`, borderRadius:12, padding:12, marginTop:10,
-      background:isVal ? "linear-gradient(180deg,#69FF4710,transparent)" : "#ffffff04"}}>
+    <div style={{border:`1px solid ${isVal?C.green+"66":"rgba(var(--ink-rgb),0.063)"}`, borderRadius:12, padding:12, marginTop:10,
+      background:isVal ? "linear-gradient(180deg,#159A5610,transparent)" : "rgba(var(--ink-rgb),0.016)"}}>
       <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap"}}>
-        <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"#fff"}}>{b.label}</div>
+        <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"var(--ink)"}}>{b.label}</div>
         <div style={{display:"flex", alignItems:"center", gap:8}}>
           <div style={{fontFamily:orb, fontWeight:700, fontSize:15, color:b.edge>0?C.green:C.soft}}>
             {b.edge_pct>0?"+":""}{b.edge_pct}%
@@ -746,9 +746,9 @@ function BetRow({ b }){
         </div>
       </div>
       <div style={{display:"flex", gap:14, flexWrap:"wrap", marginTop:9, fontFamily:mono, fontSize:10, color:C.soft}}>
-        <span>Model <b style={{color:"#fff"}}>{pc1(b.model_prob)}</b></span>
-        <span>Fair <b style={{color:"#fff"}}>{(1/b.market_fair_prob).toFixed(2)}</b></span>
-        <span>Yours <b style={{color:"#fff"}}>{b.best_odds}</b></span>
+        <span>Model <b style={{color:"var(--ink)"}}>{pc1(b.model_prob)}</b></span>
+        <span>Fair <b style={{color:"var(--ink)"}}>{(1/b.market_fair_prob).toFixed(2)}</b></span>
+        <span>Yours <b style={{color:"var(--ink)"}}>{b.best_odds}</b></span>
         {isVal && b.stake_amount!=null && <span>Stake <b style={{color:C.yellow}}>TSH {Number(b.stake_amount).toLocaleString()}</b></span>}
         {isVal && b.stake_amount==null && <span>Stake <b style={{color:C.yellow}}>{pc1(b.stake_fraction)}</b></span>}
       </div>
@@ -764,7 +764,7 @@ function ValueResult({ res }){
     <div style={{marginTop:6}}>
       {value.length>0 ? value.map((b,i)=><BetRow key={i} b={b}/>) : (
         <div style={{textAlign:"center", padding:"18px 8px", fontFamily:mono, fontSize:11, color:C.dim, lineHeight:1.6}}>
-          <div style={{fontFamily:orb, fontSize:13, color:"#fff", marginBottom:6}}>NO VALUE AT THESE ODDS</div>
+          <div style={{fontFamily:orb, fontSize:13, color:"var(--ink)", marginBottom:6}}>NO VALUE AT THESE ODDS</div>
           The bookmaker’s prices are fair or better here. Try other odds or another match.
         </div>
       )}
@@ -825,13 +825,13 @@ function BestTipsTab(){
           <div key={m.event_id} className="rl-card" style={{...st.card, padding:"13px 14px", marginBottom:10, animationDelay:`${i*0.04}s`}}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:10}}>
               <div style={{minWidth:0}}>
-                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
                   {short(m.home)} <span style={{color:C.mute, fontWeight:400}}>v</span> {short(m.away)}
                 </div>
                 <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginTop:4}}>{k.when}{k.rel?` · ${k.rel}`:""}</div>
               </div>
               <div style={{textAlign:"right", flexShrink:0}}>
-                <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:"#fff"}}>{t.label}</div>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:12, color:"var(--ink)"}}>{t.label}</div>
                 <div style={{display:"flex", alignItems:"center", gap:7, justifyContent:"flex-end", marginTop:4}}>
                   <span style={st.chip(cCol)}>{t.confidence}</span>
                   <span style={{fontFamily:orb, fontWeight:900, fontSize:15, color:cCol}}>{pc(t.prob)}</span>
@@ -852,14 +852,14 @@ function BestTipsTab(){
         const e=m.prediction; const mod=e.model_1x2[key], mkt=e.market_1x2?.[key];
         return (
           <div key={m.event_id} className="rl-card" style={{...st.card, padding:"13px 14px", marginBottom:10,
-            border:"1px solid #FFB30033", background:"linear-gradient(135deg,#FFB30010,transparent)", animationDelay:`${i*0.04}s`}}>
+            border:"1px solid #E08A0033", background:"linear-gradient(135deg,#E08A0010,transparent)", animationDelay:`${i*0.04}s`}}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:10}}>
               <div style={{minWidth:0}}>
-                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
                   {short(m.home)} <span style={{color:C.mute, fontWeight:400}}>v</span> {short(m.away)}
                 </div>
                 <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginTop:4}}>
-                  {sideLabel(m,key)} — model <b style={{color:"#fff"}}>{pc(mod)}</b> vs market <b style={{color:"#fff"}}>{pc(mkt)}</b>
+                  {sideLabel(m,key)} — model <b style={{color:"var(--ink)"}}>{pc(mod)}</b> vs market <b style={{color:"var(--ink)"}}>{pc(mkt)}</b>
                 </div>
               </div>
               <div style={{fontFamily:orb, fontWeight:900, fontSize:16, color:C.gold, flexShrink:0}}>+{Math.round(edge*100)}%</div>
@@ -915,7 +915,7 @@ function TrackRecordTab({ archive, onSettle }){
       <div>
         {counts}
         <div style={{...st.card, textAlign:"center", padding:"26px 18px"}}>
-          <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"#fff", marginBottom:8}}>GATHERING RESULTS</div>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:14, color:"var(--ink)", marginBottom:8}}>GATHERING RESULTS</div>
           <div style={{fontFamily:mono, fontSize:11, color:C.dim, lineHeight:1.7}}>
             {sc.message || "Your first graded predictions appear here once logged matches finish."}
           </div>
@@ -933,9 +933,9 @@ function TrackRecordTab({ archive, onSettle }){
   const brierBar = (label,v,col)=> v==null ? null : (
     <div style={{marginBottom:9}}>
       <div style={{display:"flex", justifyContent:"space-between", fontFamily:mono, fontSize:9.5, color:C.dim, marginBottom:4}}>
-        <span>{label}</span><span style={{color:"#fff"}}>{v.toFixed(3)}</span>
+        <span>{label}</span><span style={{color:"var(--ink)"}}>{v.toFixed(3)}</span>
       </div>
-      <div style={{height:7, borderRadius:6, background:"#ffffff08", overflow:"hidden"}}>
+      <div style={{height:7, borderRadius:6, background:"rgba(var(--ink-rgb),0.031)", overflow:"hidden"}}>
         <div className="rl-bar" style={{height:"100%", width:`${(v/bMax)*100}%`, background:col, borderRadius:6}}/>
       </div>
     </div>
@@ -948,10 +948,10 @@ function TrackRecordTab({ archive, onSettle }){
       {/* hero hit-rate */}
       <div style={{...st.card, textAlign:"center", padding:"20px 16px"}}>
         <div style={{fontFamily:mono, fontSize:8.5, color:C.soft, letterSpacing:2, marginBottom:6}}>BLENDED TOP-PICK ACCURACY</div>
-        <div style={{fontFamily:orb, fontWeight:900, fontSize:40, color:C.cyan, textShadow:"0 0 24px #00E5FF44", lineHeight:1}}>{pc(hr)}</div>
+        <div style={{fontFamily:orb, fontWeight:900, fontSize:40, color:C.cyan, textShadow:"0 0 24px #2F37D944", lineHeight:1}}>{pc(hr)}</div>
         {mf!=null && (
           <div style={{fontFamily:mono, fontSize:10.5, color:C.dim, marginTop:12}}>
-            vs market favourite <b style={{color:"#fff"}}>{pc(mf)}</b>
+            vs market favourite <b style={{color:"var(--ink)"}}>{pc(mf)}</b>
             <span style={{color:beatCol, fontFamily:orb, fontWeight:700, marginLeft:8}}>
               {beat>=0?"+":""}{Math.round(beat*100)}%
             </span>
@@ -963,7 +963,7 @@ function TrackRecordTab({ archive, onSettle }){
       {/* sharpness vs market */}
       {(b.blend!=null) && (
         <div style={st.card}>
-          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"#fff", letterSpacing:1, marginBottom:4}}>SHARPNESS (BRIER — LOWER IS BETTER)</div>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"var(--ink)", letterSpacing:1, marginBottom:4}}>SHARPNESS (BRIER — LOWER IS BETTER)</div>
           <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginBottom:14, lineHeight:1.5}}>How tight the probabilities were against what actually happened.</div>
           {brierBar("Model only", b.model, "#2b3547")}
           {brierBar("Blended (our call)", b.blend, C.cyan)}
@@ -971,7 +971,7 @@ function TrackRecordTab({ archive, onSettle }){
           {b.market!=null && (
             <div style={{marginTop:10, padding:"10px 12px", borderRadius:11, textAlign:"center",
               border:`1px solid ${sc.blend_beats_market?C.green:C.soft}44`,
-              background: sc.blend_beats_market? "linear-gradient(135deg,#69FF4712,transparent)" : "#ffffff05"}}>
+              background: sc.blend_beats_market? "linear-gradient(135deg,#159A5612,transparent)" : "rgba(var(--ink-rgb),0.02)"}}>
               <span style={{fontFamily:orb, fontWeight:700, fontSize:11, color: sc.blend_beats_market?C.green:C.dim}}>
                 {sc.blend_beats_market ? "✓ BLEND IS BEATING THE MARKET" : "MARKET STILL SHARPER — KEEP WATCHING"}
               </span>
@@ -983,7 +983,7 @@ function TrackRecordTab({ archive, onSettle }){
       {/* by competition */}
       {sc.by_competition && (sc.by_competition.internationals.settled>0 || sc.by_competition.clubs.settled>0) && (
         <div style={st.card}>
-          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"#fff", letterSpacing:1, marginBottom:12}}>BY COMPETITION</div>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"var(--ink)", letterSpacing:1, marginBottom:12}}>BY COMPETITION</div>
           {["internationals","clubs"].map(key=>{
             const c=sc.by_competition[key]; if(!c || c.settled===0) return null;
             return (
@@ -991,7 +991,7 @@ function TrackRecordTab({ archive, onSettle }){
                 borderBottom: key==="internationals" && sc.by_competition.clubs.settled>0 ? `1px solid ${C.line}`:"none"}}>
                 <span style={{fontFamily:mono, fontSize:11, color:C.dim, textTransform:"capitalize"}}>{key}</span>
                 <span style={{fontFamily:mono, fontSize:10, color:C.soft}}>
-                  <b style={{color:"#fff", fontFamily:orb, fontSize:13}}>{pc(c.hit_rate)}</b> · {c.settled} graded
+                  <b style={{color:"var(--ink)", fontFamily:orb, fontSize:13}}>{pc(c.hit_rate)}</b> · {c.settled} graded
                 </span>
               </div>
             );
@@ -1002,12 +1002,12 @@ function TrackRecordTab({ archive, onSettle }){
       {/* recent results */}
       {sc.recent && sc.recent.length>0 && (
         <div style={st.card}>
-          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"#fff", letterSpacing:1, marginBottom:10}}>RECENT RESULTS</div>
+          <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"var(--ink)", letterSpacing:1, marginBottom:10}}>RECENT RESULTS</div>
           {sc.recent.map((r,i)=>(
             <div key={i} style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8,
               padding:"9px 0", borderBottom: i<sc.recent.length-1?`1px solid ${C.line}`:"none"}}>
               <div style={{minWidth:0}}>
-                <div style={{fontFamily:mono, fontSize:11, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{r.match}</div>
+                <div style={{fontFamily:mono, fontSize:11, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{r.match}</div>
                 <div style={{fontFamily:mono, fontSize:9, color:C.soft, marginTop:3}}>
                   picked {String(r.pick||"").toUpperCase()} · ended {String(r.result||"").toUpperCase()} {r.score?`(${r.score})`:""}
                 </div>
