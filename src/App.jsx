@@ -27,10 +27,10 @@ function fmt(n, cur="TSH") {
 
 function riskInfo(streak, AB, SR) {
   const r = SR / Math.max(AB,1);
-  if(streak>=10||r<0.05) return{label:"CRITICAL",short:"CRIT",color:"#FF1744",glow:"rgba(255,23,68,0.4)",bar:1};
-  if(streak>=7 ||r<0.15) return{label:"HIGH RISK",short:"HIGH",color:"#FF6D00",glow:"rgba(255,109,0,0.35)",bar:0.75};
-  if(streak>=4 ||r<0.30) return{label:"MODERATE", short:"MOD", color:"#FFD600",glow:"rgba(255,214,0,0.3)",bar:0.5};
-  return                       {label:"SAFE ZONE",short:"SAFE",color:"#00E5FF",glow:"rgba(0,229,255,0.3)",bar:0.25};
+  if(streak>=10||r<0.05) return{label:"CRITICAL",short:"CRIT",color:"#DC3B3B",glow:"rgba(255,23,68,0.4)",bar:1};
+  if(streak>=7 ||r<0.15) return{label:"HIGH RISK",short:"HIGH",color:"#E08A00",glow:"rgba(255,109,0,0.35)",bar:0.75};
+  if(streak>=4 ||r<0.30) return{label:"MODERATE", short:"MOD", color:"#E08A00",glow:"rgba(255,214,0,0.3)",bar:0.5};
+  return                       {label:"SAFE ZONE",short:"SAFE",color:"#2F37D9",glow:"rgba(47,55,217,0.3)",bar:0.25};
 }
 
 function calcWD(AB, day, lastWD, crossed, wdPct) {
@@ -222,10 +222,10 @@ function confidenceToProb(confidence) {
 }
 
 function stakeRating(confidence) {
-  if(confidence >= 85) return { label:"STRONG BET", color:"#69FF47", pct:"1.5-2%" };
-  if(confidence >= 75) return { label:"GOOD BET",   color:"#00E5FF", pct:"1-1.5%" };
-  if(confidence >= 65) return { label:"MODERATE",   color:"#FFD600", pct:"0.5-1%" };
-  return                      { label:"SKIP",        color:"#FF1744", pct:"0%" };
+  if(confidence >= 85) return { label:"STRONG BET", color:"#159A56", pct:"1.5-2%" };
+  if(confidence >= 75) return { label:"GOOD BET",   color:"#2F37D9", pct:"1-1.5%" };
+  if(confidence >= 65) return { label:"MODERATE",   color:"#E08A00", pct:"0.5-1%" };
+  return                      { label:"SKIP",        color:"#DC3B3B", pct:"0%" };
 }
 
 function makeState(starting) {
@@ -265,9 +265,9 @@ async function fsSave(deviceId, allPlans) {
 }
 
 const PRESETS = [
-  {id:"alpha",label:"ALPHA",color:"#00E5FF",glow:"rgba(0,229,255,0.5)",gradient:"linear-gradient(135deg,#00E5FF,#0091EA)",odds:1.10,wdPct:0.25,emoji:"α"},
-  {id:"beta", label:"BETA", color:"#69FF47",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#69FF47,#00C853)",odds:1.20,wdPct:0.25,emoji:"β"},
-  {id:"gamma",label:"GAMMA",color:"#E040FB",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#E040FB,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
+  {id:"alpha",label:"ALPHA",color:"#2F37D9",glow:"rgba(47,55,217,0.5)",gradient:"linear-gradient(135deg,#2F37D9,#1E25B8)",odds:1.10,wdPct:0.25,emoji:"α"},
+  {id:"beta", label:"BETA", color:"#159A56",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#159A56,#159A56)",odds:1.20,wdPct:0.25,emoji:"β"},
+  {id:"gamma",label:"GAMMA",color:"#7C83F6",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#7C83F6,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
 ];
 const TABS = ["TODAY","TIPS","RESULTS","ARCHIVE","HISTORY","RESERVE","SETTINGS"];
 
@@ -317,7 +317,7 @@ function ParticleBurst({active, color, onDone}) {
 }
 
 // ── Grid background ───────────────────────────────────────────────
-function GridBG({color="#00E5FF"}) {
+function GridBG({color="#2F37D9"}) {
   return(
     <div style={{position:"fixed",inset:0,zIndex:0,overflow:"hidden",pointerEvents:"none"}}>
       <div style={{position:"absolute",top:"35%",left:"50%",transform:"translate(-50%,-50%)",
@@ -365,6 +365,8 @@ export default function App() {
   const [showCode,setShowCode]= useState(false);
   const [restoreInput,setRI]  = useState("");
   const [restoreMode,setRM]   = useState(false);
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem("rolloverTheme") || "light"; } catch(e) { return "light"; } });
+  useEffect(() => { try { document.documentElement.setAttribute("data-theme", theme); localStorage.setItem("rolloverTheme", theme); } catch(e) {} }, [theme]);
 
   // ── Load from Firestore on mount ────────────────────────────────
   useEffect(() => {
@@ -588,27 +590,37 @@ export default function App() {
   return (
     <div style={{...S.root, animation:shaking?"shake 0.4s ease":"none"}}>
       <GlobalCSS/>
-      <GridBG color={view==="plan" ? preset.color : "#00E5FF"}/>
+      <GridBG color={view==="plan" ? preset.color : "#2F37D9"}/>
+
+      <button onClick={()=>setTheme(t=>t==="dark"?"light":"dark")} aria-label="Toggle light or dark theme"
+        style={{position:"fixed",top:10,right:14,zIndex:500,width:34,height:34,borderRadius:"50%",
+          border:"1px solid rgba(var(--ink-rgb),0.14)",background:"var(--surface)",
+          boxShadow:"0 2px 10px rgba(0,0,0,0.10)",cursor:"pointer",display:"flex",
+          alignItems:"center",justifyContent:"center",padding:0}}>
+        {theme==="light"
+          ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg>)
+          : (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.5 13A8 8 0 1 1 11 3.5 6.4 6.4 0 0 0 20.5 13z"/></svg>)}
+      </button>
 
       {burst && <ParticleBurst active color={burst.color} onDone={()=>setBurst(null)}/>}
 
       {/* Sync indicator */}
       {syncing && (
         <div style={S.syncDot}>
-          <div style={{width:6,height:6,borderRadius:"50%",background:"#00E5FF",animation:"pulse-dot 1s ease infinite"}}/>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#00E5FF88",letterSpacing:2}}>SYNCING</span>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#2F37D9",animation:"pulse-dot 1s ease infinite"}}/>
+          <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#2F37D988",letterSpacing:2}}>SYNCING</span>
         </div>
       )}
 
       {/* Toast */}
       {toast && (
         <div style={{...S.toast,
-          background:toast.type==="win"?"linear-gradient(135deg,#00E5FF18,#00E5FF08)":
-                     toast.type==="loss"?"linear-gradient(135deg,#FF174418,#FF174408)":
-                     "linear-gradient(135deg,#FFD60018,#FFD60008)",
-          border:`1px solid ${toast.type==="win"?"#00E5FF":toast.type==="loss"?"#FF1744":"#FFD600"}55`,
-          color:toast.type==="win"?"#00E5FF":toast.type==="loss"?"#FF1744":"#FFD600",
-          boxShadow:`0 0 30px ${toast.type==="win"?"#00E5FF":toast.type==="loss"?"#FF1744":"#FFD600"}33`}}>
+          background:toast.type==="win"?"linear-gradient(135deg,#2F37D918,#2F37D908)":
+                     toast.type==="loss"?"linear-gradient(135deg,#DC3B3B18,#DC3B3B08)":
+                     "linear-gradient(135deg,#E08A0018,#E08A0008)",
+          border:`1px solid ${toast.type==="win"?"#2F37D9":toast.type==="loss"?"#DC3B3B":"#E08A00"}55`,
+          color:toast.type==="win"?"#2F37D9":toast.type==="loss"?"#DC3B3B":"#E08A00",
+          boxShadow:`0 0 30px ${toast.type==="win"?"#2F37D9":toast.type==="loss"?"#DC3B3B":"#E08A00"}33`}}>
           {toast.msg}
         </div>
       )}
@@ -617,28 +629,28 @@ export default function App() {
       {showCode && (
         <div style={S.modal}>
           <div style={S.modalBox}>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:14,color:"#00E5FF",letterSpacing:3,marginBottom:4}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:"#2F37D9",letterSpacing:3,marginBottom:4}}>
               YOUR SAVE CODE
             </div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",marginBottom:16,lineHeight:1.6}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)",marginBottom:16,lineHeight:1.6}}>
               Write this code down. Use it to restore your data on any device or browser.
             </div>
-            <div style={{background:"#00E5FF0d",border:"1px solid #00E5FF44",borderRadius:10,
+            <div style={{background:"#2F37D90d",border:"1px solid #2F37D944",borderRadius:10,
               padding:"14px",textAlign:"center",marginBottom:16}}>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:16,
-                color:"#00E5FF",letterSpacing:3,textShadow:"0 0 20px rgba(0,229,255,0.5)",
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:16,
+                color:"#2F37D9",letterSpacing:3,textShadow:"0 0 20px rgba(47,55,217,0.5)",
                 wordBreak:"break-all"}}>
                 {deviceId}
               </div>
             </div>
             <button onClick={()=>{navigator.clipboard?.writeText(deviceId);showToast("Code copied!","win");}}
-              style={{...S.actionBtn,background:"linear-gradient(135deg,#00E5FF22,#00E5FF11)",
-                border:"1px solid #00E5FF44",color:"#00E5FF",width:"100%",marginBottom:10}}>
+              style={{...S.actionBtn,background:"linear-gradient(135deg,#2F37D922,#2F37D911)",
+                border:"1px solid #2F37D944",color:"#2F37D9",width:"100%",marginBottom:10}}>
               📋 COPY CODE
             </button>
             <button onClick={()=>setShowCode(false)}
-              style={{...S.actionBtn,background:"transparent",border:"1px solid #ffffff11",
-                color:"#ffffff44",width:"100%"}}>
+              style={{...S.actionBtn,background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.067)",
+                color:"rgba(var(--ink-rgb),0.267)",width:"100%"}}>
               CLOSE
             </button>
           </div>
@@ -649,27 +661,27 @@ export default function App() {
       {restoreMode && (
         <div style={S.modal}>
           <div style={S.modalBox}>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:14,color:"#FFD600",letterSpacing:3,marginBottom:4}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:"#E08A00",letterSpacing:3,marginBottom:4}}>
               RESTORE DATA
             </div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",marginBottom:16,lineHeight:1.6}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)",marginBottom:16,lineHeight:1.6}}>
               Enter your Save Code to load your data on this device.
             </div>
             <input
               value={restoreInput}
               onChange={e=>setRI(e.target.value.toUpperCase())}
               placeholder="e.g. RO-ABC123DEF-XYZ12"
-              style={{...S.input,border:"1px solid #FFD60044",marginBottom:12,
+              style={{...S.input,border:"1px solid #E08A0044",marginBottom:12,
                 boxShadow:"0 0 20px rgba(255,214,0,0.08)"}}
             />
             <button onClick={handleRestore}
-              style={{...S.actionBtn,background:"linear-gradient(135deg,#FFD600,#FF8F00)",
+              style={{...S.actionBtn,background:"linear-gradient(135deg,#E08A00,#FF8F00)",
                 color:"#000",fontWeight:700,width:"100%",marginBottom:10}}>
               🔓 RESTORE MY DATA
             </button>
             <button onClick={()=>setRM(false)}
-              style={{...S.actionBtn,background:"transparent",border:"1px solid #ffffff11",
-                color:"#ffffff44",width:"100%"}}>
+              style={{...S.actionBtn,background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.067)",
+                color:"rgba(var(--ink-rgb),0.267)",width:"100%"}}>
               CANCEL
             </button>
           </div>
@@ -706,7 +718,7 @@ function SplashScreen() {
         <div style={S.splashLogo}>ROLLOVER</div>
         <div style={S.splashSub}>SMART BETTING TRACKER</div>
         <div style={S.splashBar}><div style={S.splashFill}/></div>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff22",
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,color:"rgba(var(--ink-rgb),0.133)",
           marginTop:16,letterSpacing:3,animation:"blink 1s step-end infinite"}}>
           CONNECTING TO CLOUD...
         </div>
@@ -732,7 +744,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
           <div style={S.homeTitle}>ROLLOVER</div>
           <div style={S.homeSub}>CLOUD-SYNCED TRACKER</div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end",marginTop:18}}>
           <div style={S.vBadge}>☁ CLOUD SAVE</div>
           <div style={{display:"flex",gap:6}}>
             <button onClick={onShowCode} style={S.headerBtn} title="Your Save Code">🔑</button>
@@ -744,7 +756,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
       {/* Cloud save notice */}
       <div style={{...S.noticeBar,marginBottom:14}}>
         <span style={{fontSize:14}}>☁</span>
-        <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#00E5FF88",letterSpacing:1}}>
+        <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#2F37D988",letterSpacing:1}}>
           Data saved to cloud. Tap 🔑 to get your Save Code for any device.
         </span>
       </div>
@@ -752,13 +764,13 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
       {/* Combined value */}
       {vals.length>0 && (
         <div style={S.combinedCard}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",letterSpacing:3}}>COMBINED PORTFOLIO</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:3}}>COMBINED PORTFOLIO</div>
           <div style={S.combinedVal}>{fmt(animTotal, cur)}</div>
           <div style={{display:"flex",gap:20,marginTop:10}}>
-            {[["ACTIVE",vals.length+"/3","#FFD600"],["BETS",allHist.length,"#00E5FF"],["WIN RATE",wr,"#69FF47"]].map(([l,v,col],i)=>(
+            {[["ACTIVE",vals.length+"/3","#E08A00"],["BETS",allHist.length,"#2F37D9"],["WIN RATE",wr,"#159A56"]].map(([l,v,col],i)=>(
               <div key={i}>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",letterSpacing:2}}>{l}</div>
-                <div style={{fontFamily:"'Orbitron',monospace",fontSize:15,color:col,marginTop:2,fontWeight:700}}>{v}</div>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:2}}>{l}</div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:15,color:col,marginTop:2,fontWeight:700}}>{v}</div>
               </div>
             ))}
           </div>
@@ -773,22 +785,22 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
         const totalStaked = allTips.reduce((s,r)=>s+r.stake,0);
         const tipWins = allTips.filter(r=>r.result==="WIN").length;
         const tipRoi = totalStaked>0?(totalProfit/totalStaked*100).toFixed(1):"0";
-        const profitCol = totalProfit>=0?"#69FF47":"#FF1744";
+        const profitCol = totalProfit>=0?"#159A56":"#DC3B3B";
         return (
-          <div style={{...S.glassCard,border:"1px solid #FFD60033",
-            background:"linear-gradient(135deg,#FFD60008,transparent)",marginBottom:14}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD60088",
+          <div style={{...S.glassCard,border:"1px solid #E08A0033",
+            background:"linear-gradient(135deg,#E08A0008,transparent)",marginBottom:14}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#E08A0088",
               letterSpacing:3,marginBottom:10}}>TIPS RESULTS SUMMARY</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
               {[
-                ["BETS",allTips.length,"#00E5FF"],
-                ["WINS",tipWins,"#69FF47"],
+                ["BETS",allTips.length,"#2F37D9"],
+                ["WINS",tipWins,"#159A56"],
                 ["ROI",(parseFloat(tipRoi)>=0?"+":"")+tipRoi+"%",profitCol],
                 ["P&L",`${totalProfit>=0?"+":""}$${Math.abs(totalProfit/TSH_TO_USD).toFixed(0)}`,profitCol],
               ].map(([l,v,col])=>(
                 <div key={l} style={{textAlign:"center"}}>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:1}}>{l}</div>
-                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,color:col,marginTop:3}}>{v}</div>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:1}}>{l}</div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:col,marginTop:3}}>{v}</div>
                 </div>
               ))}
             </div>
@@ -798,20 +810,20 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
 
       <button onClick={onPredict} style={{width:"100%",background:"none",border:"none",padding:0,
         cursor:"pointer",marginBottom:14,textAlign:"left",animation:"fadeUp 0.45s ease"}}>
-        <div style={{background:"linear-gradient(135deg,#00E5FF14,transparent)",border:"1px solid #00E5FF33",
+        <div style={{background:"linear-gradient(135deg,#2F37D914,transparent)",border:"1px solid #2F37D933",
           borderRadius:16,padding:16,display:"flex",alignItems:"center",justifyContent:"space-between",
-          boxShadow:"0 0 30px rgba(0,229,255,0.06)"}}>
+          boxShadow:"0 0 30px rgba(47,55,217,0.06)"}}>
           <div>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:14,color:"#00E5FF",letterSpacing:1}}>⚽ MATCH PREDICTIONS</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55",letterSpacing:1,marginTop:4}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:"#2F37D9",letterSpacing:1}}>⚽ MATCH PREDICTIONS</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.333)",letterSpacing:1,marginTop:4}}>
               Win %, goals &amp; value · 18 leagues + World Cup
             </div>
           </div>
-          <div style={{fontFamily:"'Orbitron',monospace",fontSize:20,color:"#00E5FF"}}>→</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:20,color:"#2F37D9"}}>→</div>
         </div>
       </button>
 
-      <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff22",letterSpacing:3,marginBottom:14,paddingLeft:2}}>
+      <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:14,paddingLeft:2}}>
         SELECT PLAN
       </div>
 
@@ -828,40 +840,40 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
               cursor:"pointer",marginBottom:12,textAlign:"left",
               animation:`fadeUp ${0.5+i*0.1}s ease`}}>
             <div style={{...S.planCard,
-              border:`1px solid ${exists?p.color+"44":"#ffffff0d"}`,
+              border:`1px solid ${exists?p.color+"44":"rgba(var(--ink-rgb),0.051)"}`,
               boxShadow:exists?`0 0 30px ${p.glow.replace("0.5","0.07")}, inset 0 0 30px ${p.glow.replace("0.5","0.02")}`:"none"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:1,
                 background:exists?`linear-gradient(90deg,transparent,${p.color},transparent)`:"transparent"}}/>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
                   <div style={{width:44,height:44,borderRadius:12,
-                    background:exists?p.gradient:"linear-gradient(135deg,#ffffff06,#ffffff02)",
+                    background:exists?p.gradient:"linear-gradient(135deg,rgba(var(--ink-rgb),0.024),rgba(var(--ink-rgb),0.008))",
                     display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:20,fontFamily:"'Orbitron',monospace",
-                    color:exists?"#000":"#ffffff22",fontWeight:900,
+                    fontSize:20,fontFamily:"'Space Grotesk',sans-serif",
+                    color:exists?"#000":"rgba(var(--ink-rgb),0.133)",fontWeight:900,
                     boxShadow:exists?`0 0 20px ${p.glow.replace("0.5","0.4")}`:"none"}}>
                     {p.emoji}
                   </div>
                   <div>
-                    <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:16,
-                      color:exists?p.color:"#ffffff22",letterSpacing:2}}>
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:16,
+                      color:exists?p.color:"rgba(var(--ink-rgb),0.133)",letterSpacing:2}}>
                       PLAN {p.label}
                     </div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginTop:3}}>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginTop:3}}>
                       {exists?`×${pl.odds} · ${pl.currency} · DAY ${st.day-1}`:`×${p.odds} · TAP TO ACTIVATE`}
                     </div>
                   </div>
                 </div>
                 {exists ? (
-                  <div style={{padding:"4px 10px",borderRadius:20,fontFamily:"'DM Mono',monospace",
+                  <div style={{padding:"4px 10px",borderRadius:20,fontFamily:"'Inter',sans-serif",
                     fontWeight:700,fontSize:9,letterSpacing:1,
                     background:`${risk.color}15`,color:risk.color,
                     border:`1px solid ${risk.color}44`}}>
                     {risk.short}
                   </div>
                 ):(
-                  <div style={{padding:"4px 12px",borderRadius:20,fontFamily:"'DM Mono',monospace",
-                    fontSize:9,color:"#ffffff22",border:"1px solid #ffffff11"}}>
+                  <div style={{padding:"4px 12px",borderRadius:20,fontFamily:"'Inter',sans-serif",
+                    fontSize:9,color:"rgba(var(--ink-rgb),0.133)",border:"1px solid rgba(var(--ink-rgb),0.067)"}}>
                     + ADD
                   </div>
                 )}
@@ -870,19 +882,19 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
                 <>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:14}}>
                     {[["BANK",fmt(st.AB,pl.currency),p.color],
-                      ["RESERVE",fmt(st.SR,pl.currency),"#FFD600"],
-                      ["ROI",(parseFloat(roi)>=0?"+":"")+roi+"%",parseFloat(roi)>=0?"#69FF47":"#FF1744"]
+                      ["RESERVE",fmt(st.SR,pl.currency),"#E08A00"],
+                      ["ROI",(parseFloat(roi)>=0?"+":"")+roi+"%",parseFloat(roi)>=0?"#159A56":"#DC3B3B"]
                     ].map(([l,v,col],i)=>(
-                      <div key={i} style={{background:"#ffffff05",borderRadius:8,padding:"8px 10px",border:`1px solid ${col}15`}}>
-                        <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:2,marginBottom:4}}>{l}</div>
-                        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:10,color:col}}>{v}</div>
+                      <div key={i} style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:8,padding:"8px 10px",border:`1px solid ${col}15`}}>
+                        <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2,marginBottom:4}}>{l}</div>
+                        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,color:col}}>{v}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{display:"flex",gap:16,marginTop:10,paddingTop:10,borderTop:"1px solid #ffffff06"}}>
-                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33"}}>🔥 {st.streak||0}</span>
-                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#69FF4766"}}>✓ {(st.history||[]).filter(h=>h.result==="WIN").length}W</span>
-                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#FF174466"}}>✕ {st.losses||0}L</span>
+                  <div style={{display:"flex",gap:16,marginTop:10,paddingTop:10,borderTop:"1px solid rgba(var(--ink-rgb),0.024)"}}>
+                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)"}}>🔥 {st.streak||0}</span>
+                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#159A5666"}}>✓ {(st.history||[]).filter(h=>h.result==="WIN").length}W</span>
+                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#DC3B3B66"}}>✕ {st.losses||0}L</span>
                   </div>
                 </>
               )}
@@ -892,7 +904,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
       })}
 
       {vals.length===0 && (
-        <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#ffffff22",lineHeight:2}}>
+        <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'Inter',sans-serif",fontSize:11,color:"rgba(var(--ink-rgb),0.133)",lineHeight:2}}>
           Tap a plan above to activate it.<br/>All data auto-saves to the cloud.
         </div>
       )}
@@ -911,26 +923,26 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTr
         padding:"14px 0",borderBottom:`1px solid ${preset.color}22`,marginBottom:14}}>
         <button onClick={onBack} style={S.backBtn}>← PLANS</button>
         <div style={{textAlign:"center"}}>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:18,
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:18,
             color:preset.color,letterSpacing:3,textShadow:`0 0 20px ${preset.glow}`}}>
             {preset.emoji} {preset.label}
           </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginTop:2}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginTop:2}}>
             DAY {st.day-1} · ×{plan.odds} · {plan.currency}
           </div>
         </div>
-        <div style={{padding:"5px 10px",borderRadius:20,fontFamily:"'DM Mono',monospace",
+        <div style={{padding:"5px 10px",borderRadius:20,fontFamily:"'Inter',sans-serif",
           fontWeight:700,fontSize:9,letterSpacing:1,
           background:`${risk.color}15`,color:risk.color,
           border:`1px solid ${risk.color}44`,boxShadow:`0 0 12px ${risk.color}33`}}>
           {risk.short}
         </div>
       </div>
-      <div style={{display:"flex",gap:4,marginBottom:14,background:"#ffffff05",borderRadius:12,padding:4}}>
+      <div style={{display:"flex",gap:4,marginBottom:14,background:"rgba(var(--ink-rgb),0.02)",borderRadius:12,padding:4}}>
         {TABS.map(t=>(
           <button key={t} onClick={()=>setTab(t)}
             style={{flex:1,padding:"8px 2px",borderRadius:8,border:"none",cursor:"pointer",
-              fontFamily:"'DM Mono',monospace",fontSize:8,letterSpacing:0.5,transition:"all .25s",
+              fontFamily:"'Inter',sans-serif",fontSize:8,letterSpacing:0.5,transition:"all .25s",
               background:tab===t?preset.gradient:"transparent",
               color:tab===t?"#000000cc":preset.color+"55",
               fontWeight:tab===t?"700":"400",
@@ -965,67 +977,67 @@ function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
       {/* Risk meter */}
       <div style={{...S.glassCard,border:`1px solid ${risk.color}33`,background:`linear-gradient(135deg,${risk.color}07,transparent)`,marginBottom:10,padding:"12px 14px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",letterSpacing:2}}>RISK ASSESSMENT</span>
-          <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:risk.color,textShadow:`0 0 10px ${risk.glow}`}}>{risk.label}</span>
+          <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)",letterSpacing:2}}>RISK ASSESSMENT</span>
+          <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:risk.color,textShadow:`0 0 10px ${risk.glow}`}}>{risk.label}</span>
         </div>
         <div style={{display:"flex",gap:3,height:5,marginBottom:8}}>
           {[0.25,0.5,0.75,1].map((seg,i)=>(
             <div key={i} style={{flex:1,borderRadius:3,transition:"all .5s ease",
-              background:risk.bar>=seg?(i===0?"#00E5FF":i===1?"#FFD600":i===2?"#FF6D00":"#FF1744"):"#ffffff0d",
-              boxShadow:risk.bar>=seg?`0 0 8px ${i===0?"#00E5FF":i===1?"#FFD600":i===2?"#FF6D00":"#FF1744"}88`:"none"}}/>
+              background:risk.bar>=seg?(i===0?"#2F37D9":i===1?"#E08A00":i===2?"#E08A00":"#DC3B3B"):"rgba(var(--ink-rgb),0.051)",
+              boxShadow:risk.bar>=seg?`0 0 8px ${i===0?"#2F37D9":i===1?"#E08A00":i===2?"#E08A00":"#DC3B3B"}88`:"none"}}/>
           ))}
         </div>
         <div style={{display:"flex",justifyContent:"space-between"}}>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33"}}>🔥 {st.streak||0} streak</span>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33"}}>⏱ WD in {nextWD}d</span>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33"}}>✕ {st.losses||0} losses</span>
+          <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)"}}>🔥 {st.streak||0} streak</span>
+          <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)"}}>⏱ WD in {nextWD}d</span>
+          <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)"}}>✕ {st.losses||0} losses</span>
         </div>
       </div>
 
       {/* Bank hero */}
       <div style={{...S.glassCard,border:`1px solid ${preset.color}33`,
-        background:`linear-gradient(135deg,${preset.color}09,#ffffff03)`,
+        background:`linear-gradient(135deg,${preset.color}09,rgba(var(--ink-rgb),0.012))`,
         boxShadow:`0 0 40px ${preset.glow.replace("0.5","0.07")}`,marginBottom:10,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-20,right:-20,width:80,height:80,borderRadius:"50%",
           background:`radial-gradient(circle,${preset.color}18,transparent)`,pointerEvents:"none"}}/>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color+"88",letterSpacing:3,marginBottom:4}}>◈ ACTIVE BANK</div>
-        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:28,
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:preset.color+"88",letterSpacing:3,marginBottom:4}}>◈ ACTIVE BANK</div>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:28,
           color:preset.color,lineHeight:1,textShadow:`0 0 30px ${preset.glow}`}}>
           {fmt(animAB,plan.currency)}
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:14}}>
-          <div style={{background:"#ffffff05",borderRadius:10,padding:"10px 12px",border:"1px solid #FFD60022"}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD60066",letterSpacing:2,marginBottom:4}}>SAFE RESERVE</div>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,color:"#FFD600",fontSize:14}}>{fmt(animSR,plan.currency)}</div>
+          <div style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:10,padding:"10px 12px",border:"1px solid #E08A0022"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#E08A0066",letterSpacing:2,marginBottom:4}}>SAFE RESERVE</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,color:"#E08A00",fontSize:14}}>{fmt(animSR,plan.currency)}</div>
           </div>
-          <div style={{background:"#ffffff05",borderRadius:10,padding:"10px 12px",border:"1px solid #69FF4722"}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#69FF4766",letterSpacing:2,marginBottom:4}}>TOTAL VALUE</div>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,color:"#69FF47",fontSize:14}}>{fmt(animTV,plan.currency)}</div>
+          <div style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:10,padding:"10px 12px",border:"1px solid #159A5622"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#159A5666",letterSpacing:2,marginBottom:4}}>TOTAL VALUE</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,color:"#159A56",fontSize:14}}>{fmt(animTV,plan.currency)}</div>
           </div>
         </div>
       </div>
 
       {/* Today's bet */}
       <div style={{...S.glassCard,marginBottom:10}}>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff22",letterSpacing:3,marginBottom:12}}>TODAY'S ROLLOVER — DAY {st.day}</div>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:12}}>TODAY'S ROLLOVER — DAY {st.day}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           {[["STAKE",fmt(st.AB,plan.currency),preset.color],
-            ["WIN TARGET",fmt(pot,plan.currency),"#69FF47"],
-            ["NET PROFIT","+"+fmt(pot-st.AB,plan.currency),"#69FF47"],
-            ["ODDS","× "+plan.odds,"#FFD600"]
+            ["WIN TARGET",fmt(pot,plan.currency),"#159A56"],
+            ["NET PROFIT","+"+fmt(pot-st.AB,plan.currency),"#159A56"],
+            ["ODDS","× "+plan.odds,"#E08A00"]
           ].map(([l,v,col],i)=>(
-            <div key={i} style={{background:"#ffffff04",border:`1px solid ${col}18`,borderRadius:10,padding:"10px 12px",position:"relative",overflow:"hidden"}}>
+            <div key={i} style={{background:"rgba(var(--ink-rgb),0.016)",border:`1px solid ${col}18`,borderRadius:10,padding:"10px 12px",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${col}44,transparent)`}}/>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"66",letterSpacing:2,marginBottom:6}}>{l}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,color:col,fontSize:12}}>{v}</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:col+"66",letterSpacing:2,marginBottom:6}}>{l}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,color:col,fontSize:12}}>{v}</div>
             </div>
           ))}
         </div>
         {wdCalc.wd>0 && (
-          <div style={{marginTop:10,background:"#FFD60008",border:"1px solid #FFD60033",borderRadius:10,padding:"10px 12px"}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:10,color:"#FFD600",letterSpacing:1,marginBottom:6}}>⚡ WITHDRAWAL TRIGGERED</div>
+          <div style={{marginTop:10,background:"#E08A0008",border:"1px solid #E08A0033",borderRadius:10,padding:"10px 12px"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:10,color:"#E08A00",letterSpacing:1,marginBottom:6}}>⚡ WITHDRAWAL TRIGGERED</div>
             {wdCalc.reasons.map((r,i)=>(
-              <div key={i} style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#FFD60088",marginTop:2}}>› {r}</div>
+              <div key={i} style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#E08A0088",marginTop:2}}>› {r}</div>
             ))}
           </div>
         )}
@@ -1034,26 +1046,26 @@ function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
       {/* ROI */}
       <div style={{...S.glassCard,display:"flex",justifyContent:"space-between",alignItems:"center",
         marginBottom:10,padding:"12px 16px",
-        background:parseFloat(roi)>=0?"linear-gradient(135deg,#69FF4707,transparent)":"linear-gradient(135deg,#FF174407,transparent)",
-        border:`1px solid ${parseFloat(roi)>=0?"#69FF4722":"#FF174422"}`}}>
+        background:parseFloat(roi)>=0?"linear-gradient(135deg,#159A5607,transparent)":"linear-gradient(135deg,#DC3B3B07,transparent)",
+        border:`1px solid ${parseFloat(roi)>=0?"#159A5622":"#DC3B3B22"}`}}>
         <div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",letterSpacing:2}}>TOTAL RETURN</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginTop:2}}>Since Day 1</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2}}>TOTAL RETURN</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginTop:2}}>Since Day 1</div>
         </div>
-        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:28,letterSpacing:1,
-          color:parseFloat(roi)>=0?"#69FF47":"#FF1744",
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:28,letterSpacing:1,
+          color:parseFloat(roi)>=0?"#159A56":"#DC3B3B",
           textShadow:`0 0 20px ${parseFloat(roi)>=0?"rgba(105,255,71,0.5)":"rgba(255,23,68,0.5)"}`}}>
           {parseFloat(roi)>=0?"+":""}{roi}%
         </div>
       </div>
 
       {(st.streak||0)>=7 && (
-        <div style={{...S.glassCard,marginBottom:10,background:"linear-gradient(135deg,#FF6D0010,transparent)",
-          border:"1px solid #FF6D0033",padding:"10px 14px"}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:11,color:"#FF6D00",marginBottom:4}}>
+        <div style={{...S.glassCard,marginBottom:10,background:"linear-gradient(135deg,#E08A0010,transparent)",
+          border:"1px solid #E08A0033",padding:"10px 14px"}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:11,color:"#E08A00",marginBottom:4}}>
             ⚠ STREAK ALERT — {st.streak} CONSECUTIVE WINS
           </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#FF6D0088",lineHeight:1.6}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#E08A0088",lineHeight:1.6}}>
             Consider moving extra funds to Safe Reserve before today's bet.
           </div>
         </div>
@@ -1062,15 +1074,15 @@ function TodayTab({plan,st,risk,nextWD,wdCalc,onBet,preset}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginTop:4}}>
         <button onClick={()=>onBet("WIN")} style={{...S.winBtn,boxShadow:"0 4px 30px rgba(105,255,71,0.3)"}}>
           <div style={{fontSize:26,marginBottom:4}}>✦</div>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:18,letterSpacing:3}}>WIN</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,opacity:.7,marginTop:2}}>Roll profits forward</div>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)"}}/>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:18,letterSpacing:3}}>WIN</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,opacity:.7,marginTop:2}}>Roll profits forward</div>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:"linear-gradient(90deg,transparent,rgba(var(--sheen-rgb),0.3),transparent)"}}/>
         </button>
         <button onClick={()=>onBet("LOSS")} style={{...S.lossBtn,boxShadow:"0 4px 30px rgba(255,23,68,0.3)"}}>
           <div style={{fontSize:26,marginBottom:4}}>✕</div>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:18,letterSpacing:3}}>LOSS</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,opacity:.7,marginTop:2}}>Chain broke · SR restart</div>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)"}}/>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:18,letterSpacing:3}}>LOSS</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,opacity:.7,marginTop:2}}>Chain broke · SR restart</div>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:"linear-gradient(90deg,transparent,rgba(var(--sheen-rgb),0.2),transparent)"}}/>
         </button>
       </div>
     </div>
@@ -1146,33 +1158,33 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
       {/* Summary stats */}
       <div style={{...S.glassCard, border:`1px solid ${preset.color}33`,
         background:`linear-gradient(135deg,${preset.color}08,transparent)`, marginBottom:10}}>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color+"88",
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:preset.color+"88",
           letterSpacing:3, marginBottom:12}}>TIPS PERFORMANCE TRACKER</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
           {[
             ["TOTAL P&L", `${totalProfit>=0?"+":""}${fmt(totalProfit,plan.currency)}`,
-             totalProfit>=0?"#69FF47":"#FF1744"],
+             totalProfit>=0?"#159A56":"#DC3B3B"],
             ["USD P&L", `${totalProfit>=0?"+":"-"}$${Math.abs(totalProfit/TSH_TO_USD).toFixed(2)}`,
-             totalProfit>=0?"#69FF47":"#FF1744"],
-            ["WIN RATE", wr+"%", parseInt(wr)>=55?"#69FF47":parseInt(wr)>=45?"#FFD600":"#FF1744"],
+             totalProfit>=0?"#159A56":"#DC3B3B"],
+            ["WIN RATE", wr+"%", parseInt(wr)>=55?"#159A56":parseInt(wr)>=45?"#E08A00":"#DC3B3B"],
             ["ROI", (parseFloat(roi)>=0?"+":"")+roi+"%",
-             parseFloat(roi)>=0?"#69FF47":"#FF1744"],
-            ["TOTAL STAKED", fmt(totalStaked,plan.currency), "#00E5FF"],
+             parseFloat(roi)>=0?"#159A56":"#DC3B3B"],
+            ["TOTAL STAKED", fmt(totalStaked,plan.currency), "#2F37D9"],
             ["BETS LOGGED", results.length, preset.color],
           ].map(([l,v,col])=>(
-            <div key={l} style={{background:"#ffffff05",borderRadius:10,padding:"10px 12px",
+            <div key={l} style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:10,padding:"10px 12px",
               border:`1px solid ${col}18`}}>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:col+"66",
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:col+"66",
                 letterSpacing:2,marginBottom:4}}>{l}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,color:col}}>{v}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:col}}>{v}</div>
             </div>
           ))}
         </div>
-        <div style={{display:"flex",gap:12,paddingTop:10,borderTop:"1px solid #ffffff08"}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#69FF4788"}}>
+        <div style={{display:"flex",gap:12,paddingTop:10,borderTop:"1px solid rgba(var(--ink-rgb),0.031)"}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#159A5688"}}>
             ✓ {wins.length} wins
           </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#FF174488"}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#DC3B3B88"}}>
             ✕ {losses.length} losses
           </div>
         </div>
@@ -1181,30 +1193,30 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
       {/* Pending tips pulled from GET TIPS — settle after each match */}
       {/* Auto-graded tip accuracy — results caught automatically */}
       {gradedTotal>0 && (
-        <div style={{...S.glassCard, border:"1px solid #00E5FF33",
-          background:"linear-gradient(135deg,#00E5FF0a,transparent)", marginBottom:10,
+        <div style={{...S.glassCard, border:"1px solid #2F37D933",
+          background:"linear-gradient(135deg,#2F37D90a,transparent)", marginBottom:10,
           display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#00E5FF99",letterSpacing:2,marginBottom:4}}>TIP ACCURACY · AUTO-GRADED</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#2F37D999",letterSpacing:2,marginBottom:4}}>TIP ACCURACY · AUTO-GRADED</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.4)"}}>
               {gradedWins}W · {gradedTotal-gradedWins}L · {gradedTotal} graded{autoPendingCount>0?` · ${autoPendingCount} pending`:""}
             </div>
           </div>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:26,
-            color: tipAccuracy>=55?"#69FF47":tipAccuracy>=45?"#FFD600":"#FF1744"}}>{tipAccuracy}%</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:26,
+            color: tipAccuracy>=55?"#159A56":tipAccuracy>=45?"#E08A00":"#DC3B3B"}}>{tipAccuracy}%</div>
         </div>
       )}
 
       {pending.length>0 && (
-        <div style={{...S.glassCard, border:"1px solid #FFD60044",
-          background:"linear-gradient(135deg,#FFD60008,transparent)", marginBottom:10}}>
+        <div style={{...S.glassCard, border:"1px solid #E08A0044",
+          background:"linear-gradient(135deg,#E08A0008,transparent)", marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD600aa",letterSpacing:2}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#E08A00aa",letterSpacing:2}}>
               PENDING TIPS · {pending.length}
             </div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33"}}>from GET TIPS</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)"}}>from GET TIPS</div>
           </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",lineHeight:1.6,marginBottom:12}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)",lineHeight:1.6,marginBottom:12}}>
             Enter the stake you placed, then tap Win or Loss. Tap ✕ to drop a tip you didn’t bet.
           </div>
           {pending.map(t=> <PendingTipRow key={t.id} tip={t} preset={preset} onSettle={onSettle} onRemove={onRemove}/>)}
@@ -1214,8 +1226,8 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
       {/* Clear & Archive finished tips */}
       {(st.tipResults||[]).some(r=>r.result==="WIN"||r.result==="LOSS"||r.autoResult) && (
         <button onClick={onArchive}
-          style={{width:"100%",background:"#ffffff06",border:"1px solid #ffffff22",borderRadius:12,
-            color:"#ffffff99",fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:10.5,
+          style={{width:"100%",background:"rgba(var(--ink-rgb),0.024)",border:"1px solid rgba(var(--ink-rgb),0.133)",borderRadius:12,
+            color:"rgba(var(--ink-rgb),0.6)",fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:10.5,
             padding:"11px",cursor:"pointer",letterSpacing:1,marginBottom:10}}>
           {"\u21b3 CLEAR & ARCHIVE FINISHED TIPS"}
         </button>
@@ -1223,9 +1235,9 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
 
       {/* Log a tip result button */}
       <button onClick={()=>setShowForm(!showForm)}
-        style={{width:"100%",background:showForm?"#ffffff08":`linear-gradient(135deg,${preset.color}22,${preset.color}11)`,
+        style={{width:"100%",background:showForm?"rgba(var(--ink-rgb),0.031)":`linear-gradient(135deg,${preset.color}22,${preset.color}11)`,
           border:`1px solid ${preset.color}44`,borderRadius:12,color:preset.color,
-          fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:11,
+          fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:11,
           padding:"12px",cursor:"pointer",letterSpacing:1,marginBottom:10}}>
         {showForm ? "✕ CANCEL" : "+ LOG TIP RESULT"}
       </button>
@@ -1233,7 +1245,7 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
       {/* Log form */}
       {showForm && (
         <div style={{...S.glassCard,marginBottom:10,border:`1px solid ${preset.color}33`}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",
             letterSpacing:2,marginBottom:12}}>LOG A TIP RESULT</div>
           {[
             {k:"match",  label:"MATCH",  ph:"e.g. Arsenal vs Chelsea"},
@@ -1244,7 +1256,7 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
             {k:"stake",  label:"STAKE ("+plan.currency+")", ph:"e.g. 5000", type:"number"},
           ].map(({k,label,ph,type="text"})=>(
             <div key={k} style={{marginBottom:8}}>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",
                 letterSpacing:1,marginBottom:4}}>{label}</div>
               <input type={type} placeholder={ph} value={form[k]}
                 onChange={e=>setForm({...form,[k]:e.target.value})}
@@ -1253,17 +1265,17 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
           ))}
           {/* Result toggle */}
           <div style={{marginBottom:12}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",
               letterSpacing:1,marginBottom:8}}>RESULT</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {["WIN","LOSS"].map(r=>(
                 <button key={r} onClick={()=>setForm({...form,result:r})}
                   style={{padding:"10px",borderRadius:10,border:"none",cursor:"pointer",
-                    fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,
+                    fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,
                     background: form.result===r
-                      ? (r==="WIN"?"linear-gradient(135deg,#69FF47,#00C853)":"linear-gradient(135deg,#FF1744,#B71C1C)")
-                      : "#ffffff08",
-                    color: form.result===r ? (r==="WIN"?"#001a00":"#fff") : "#ffffff44",
+                      ? (r==="WIN"?"linear-gradient(135deg,#159A56,#159A56)":"linear-gradient(135deg,#DC3B3B,#B0302F)")
+                      : "rgba(var(--ink-rgb),0.031)",
+                    color: form.result===r ? (r==="WIN"?"#001a00":"var(--ink)") : "rgba(var(--ink-rgb),0.267)",
                   }}>
                   {r==="WIN"?"✦ WIN":"✕ LOSS"}
                 </button>
@@ -1272,11 +1284,11 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
           </div>
           {/* Preview profit */}
           {form.odds && form.stake && (
-            <div style={{background:form.result==="WIN"?"#69FF4710":"#FF174410",
+            <div style={{background:form.result==="WIN"?"#159A5610":"#DC3B3B10",
               borderRadius:8,padding:"8px 12px",marginBottom:12,
-              border:`1px solid ${form.result==="WIN"?"#69FF4733":"#FF174433"}`}}>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
-                color:form.result==="WIN"?"#69FF47":"#FF1744"}}>
+              border:`1px solid ${form.result==="WIN"?"#159A5633":"#DC3B3B33"}`}}>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                color:form.result==="WIN"?"#159A56":"#DC3B3B"}}>
                 {form.result==="WIN"
                   ? `Profit: +${fmt(parseFloat(form.stake)*(parseFloat(form.odds)-1),plan.currency)} (+$${(parseFloat(form.stake)*(parseFloat(form.odds)-1)/TSH_TO_USD).toFixed(2)})`
                   : `Loss: -${fmt(parseFloat(form.stake),plan.currency)} (-$${(parseFloat(form.stake)/TSH_TO_USD).toFixed(2)})`
@@ -1286,7 +1298,7 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
           )}
           <button onClick={handleLog}
             style={{width:"100%",background:preset.gradient,border:"none",borderRadius:10,
-              color:"#000",fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
+              color:"#000",fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
               padding:"12px",cursor:"pointer",boxShadow:`0 0 20px ${preset.glow}`}}>
             SAVE RESULT
           </button>
@@ -1296,27 +1308,27 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
       {/* ROI by Market */}
       {Object.keys(byMarket).length > 0 && (
         <div style={{...S.glassCard,marginBottom:10}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",
             letterSpacing:2,marginBottom:10}}>ROI BY MARKET</div>
           {Object.entries(byMarket)
             .sort((a,b)=>b[1].profit-a[1].profit)
             .map(([market,data])=>{
               const mRoi = data.staked>0?(data.profit/data.staked*100).toFixed(1):"0";
-              const col = parseFloat(mRoi)>=0?"#69FF47":"#FF1744";
+              const col = parseFloat(mRoi)>=0?"#159A56":"#DC3B3B";
               return (
                 <div key={market} style={{display:"flex",justifyContent:"space-between",
-                  alignItems:"center",padding:"8px 0",borderBottom:"1px solid #ffffff06"}}>
+                  alignItems:"center",padding:"8px 0",borderBottom:"1px solid rgba(var(--ink-rgb),0.024)"}}>
                   <div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff77"}}>{market}</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginTop:2}}>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.467)"}}>{market}</div>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",marginTop:2}}>
                       {data.wins}W {data.losses}L
                     </div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col}}>
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:col}}>
                       {parseFloat(mRoi)>=0?"+":""}{mRoi}%
                     </div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"88",marginTop:2}}>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:col+"88",marginTop:2}}>
                       {fmt(data.profit,plan.currency)}
                     </div>
                   </div>
@@ -1329,28 +1341,28 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
       {/* ROI by League */}
       {Object.keys(byLeague).length > 0 && (
         <div style={{...S.glassCard,marginBottom:10}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",
             letterSpacing:2,marginBottom:10}}>ROI BY LEAGUE</div>
           {Object.entries(byLeague)
             .sort((a,b)=>b[1].profit-a[1].profit)
             .slice(0,8)
             .map(([league,data])=>{
               const lRoi = data.staked>0?(data.profit/data.staked*100).toFixed(1):"0";
-              const col = parseFloat(lRoi)>=0?"#69FF47":"#FF1744";
+              const col = parseFloat(lRoi)>=0?"#159A56":"#DC3B3B";
               return (
                 <div key={league} style={{display:"flex",justifyContent:"space-between",
-                  alignItems:"center",padding:"8px 0",borderBottom:"1px solid #ffffff06"}}>
+                  alignItems:"center",padding:"8px 0",borderBottom:"1px solid rgba(var(--ink-rgb),0.024)"}}>
                   <div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff77"}}>{league}</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginTop:2}}>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.467)"}}>{league}</div>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",marginTop:2}}>
                       {data.wins}W {data.losses}L
                     </div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col}}>
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:col}}>
                       {parseFloat(lRoi)>=0?"+":""}{lRoi}%
                     </div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"88",marginTop:2}}>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:col+"88",marginTop:2}}>
                       {fmt(data.profit,plan.currency)}
                     </div>
                   </div>
@@ -1362,46 +1374,46 @@ function ResultsTab({plan, st, preset, onLogTip, onSettle, onRemove, onArchive})
 
       {/* Recent results list */}
       {results.length===0 ? (
-        <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'DM Mono',monospace",
-          fontSize:10,color:"#ffffff22",lineHeight:2}}>
+        <div style={{textAlign:"center",padding:"40px 0",fontFamily:"'Inter',sans-serif",
+          fontSize:10,color:"rgba(var(--ink-rgb),0.133)",lineHeight:2}}>
           <div style={{fontSize:36,marginBottom:12,opacity:.3}}>📊</div>
           No settled results yet.<br/>
           {pending.length>0 ? "Settle your pending tips above after the matches finish." : "Pull tips in the TIPS tab — they’ll appear here to grade."}
         </div>
       ) : (
         <div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.133)",
             letterSpacing:2,marginBottom:10}}>RECENT RESULTS</div>
           {results.slice(0,20).map((r,i)=>(
             <div key={r.id||i} style={{...S.glassCard,marginBottom:8,padding:"12px 14px",
-              borderLeft:`2px solid ${r.result==="WIN"?"#69FF47":"#FF1744"}`}}>
+              borderLeft:`2px solid ${r.result==="WIN"?"#159A56":"#DC3B3B"}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{flex:1,paddingRight:8}}>
-                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
-                    color:"#ffffff",marginBottom:3}}>{r.match}</div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginBottom:4}}>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
+                    color:"var(--ink)",marginBottom:3}}>{r.match}</div>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",marginBottom:4}}>
                     {r.league} · {r.market}
                   </div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff66"}}>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.4)"}}>
                     {r.pick} @ {r.odds} · Stake: {fmt(r.stake,plan.currency)}
                   </div>
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:14,
-                    color:r.result==="WIN"?"#69FF47":"#FF1744",marginBottom:4}}>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:14,
+                    color:r.result==="WIN"?"#159A56":"#DC3B3B",marginBottom:4}}>
                     {r.result==="WIN"?"✦ WIN":"✕ LOSS"}
                   </div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
-                    color:r.result==="WIN"?"#69FF47":"#FF1744"}}>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                    color:r.result==="WIN"?"#159A56":"#DC3B3B"}}>
                     {r.profitTSH>=0?"+":""}{fmt(r.profitTSH,plan.currency)}
                   </div>
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
-                    color:r.result==="WIN"?"#69FF4788":"#FF174488"}}>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                    color:r.result==="WIN"?"#159A5688":"#DC3B3B88"}}>
                     {r.profitTSH>=0?"+":"-"}${Math.abs(r.profitUSD).toFixed(2)}
                   </div>
                 </div>
               </div>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.133)",
                 marginTop:6}}>{r.date}</div>
             </div>
           ))}
@@ -1417,7 +1429,7 @@ function HistTab({plan,st,preset}) {
   const wins = st.history.filter(h=>h.result==="WIN").length;
   const wr   = hist.length>0?(wins/hist.length*100).toFixed(1):0;
   if(!hist.length) return(
-    <div style={{textAlign:"center",padding:"60px 0",color:"#ffffff22",fontFamily:"'DM Mono',monospace"}}>
+    <div style={{textAlign:"center",padding:"60px 0",color:"rgba(var(--ink-rgb),0.133)",fontFamily:"'Inter',sans-serif"}}>
       <div style={{fontSize:40,marginBottom:12,opacity:.3}}>◈</div>
       <div style={{letterSpacing:2}}>NO BETS LOGGED YET</div>
     </div>
@@ -1425,29 +1437,29 @@ function HistTab({plan,st,preset}) {
   return(
     <div>
       <div style={{...S.glassCard,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0,marginBottom:12,padding:0,overflow:"hidden"}}>
-        {[["BETS",hist.length,preset.color],["WIN RATE",wr+"%","#69FF47"],["LOSSES",st.losses||0,"#FF1744"]].map(([l,v,col],i)=>(
-          <div key={i} style={{padding:"12px",borderRight:i<2?"1px solid #ffffff08":"none",textAlign:"center"}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",letterSpacing:2,marginBottom:4}}>{l}</div>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:16,color:col}}>{v}</div>
+        {[["BETS",hist.length,preset.color],["WIN RATE",wr+"%","#159A56"],["LOSSES",st.losses||0,"#DC3B3B"]].map(([l,v,col],i)=>(
+          <div key={i} style={{padding:"12px",borderRight:i<2?"1px solid rgba(var(--ink-rgb),0.031)":"none",textAlign:"center"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2,marginBottom:4}}>{l}</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:16,color:col}}>{v}</div>
           </div>
         ))}
       </div>
       {hist.map((h,i)=>(
         <div key={i} style={{...S.glassCard,marginBottom:8,padding:"12px 14px",
-          borderLeft:`2px solid ${h.result==="WIN"?"#69FF47":"#FF1744"}`}}>
+          borderLeft:`2px solid ${h.result==="WIN"?"#159A56":"#DC3B3B"}`}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginBottom:4}}>DAY {h.day}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,color:h.result==="WIN"?"#69FF47":"#FF1744"}}>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginBottom:4}}>DAY {h.day}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:h.result==="WIN"?"#159A56":"#DC3B3B"}}>
                 {h.result==="WIN"?"✦ WIN":"✕ LOSS"}
               </div>
             </div>
             <div style={{textAlign:"right"}}>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",marginBottom:4}}>{fmt(h.openAB,plan.currency)}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:h.result==="WIN"?"#69FF47":"#FF1744"}}>→ {fmt(h.closeAB,plan.currency)}</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginBottom:4}}>{fmt(h.openAB,plan.currency)}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:h.result==="WIN"?"#159A56":"#DC3B3B"}}>→ {fmt(h.closeAB,plan.currency)}</div>
             </div>
           </div>
-          {h.wd>0&&<div style={{marginTop:8,background:"#FFD60008",borderRadius:6,padding:"5px 8px",fontFamily:"'DM Mono',monospace",fontSize:9,color:"#FFD60088"}}>⚡ Withdrawn: {fmt(h.wd,plan.currency)}</div>}
+          {h.wd>0&&<div style={{marginTop:8,background:"#E08A0008",borderRadius:6,padding:"5px 8px",fontFamily:"'Inter',sans-serif",fontSize:9,color:"#E08A0088"}}>⚡ Withdrawn: {fmt(h.wd,plan.currency)}</div>}
         </div>
       ))}
     </div>
@@ -1463,43 +1475,43 @@ function SRTab({plan,st,preset}) {
   const animSR = useCountUp(st.SR);
   return(
     <div>
-      <div style={{...S.glassCard,border:"1px solid #FFD60033",background:"linear-gradient(135deg,#FFD60008,transparent)",marginBottom:10}}>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD60066",letterSpacing:3,marginBottom:4}}>◈ SAFE RESERVE</div>
-        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:26,color:"#FFD600",textShadow:"0 0 30px rgba(255,214,0,0.6)"}}>
+      <div style={{...S.glassCard,border:"1px solid #E08A0033",background:"linear-gradient(135deg,#E08A0008,transparent)",marginBottom:10}}>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#E08A0066",letterSpacing:3,marginBottom:4}}>◈ SAFE RESERVE</div>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:26,color:"#E08A00",textShadow:"0 0 30px rgba(255,214,0,0.6)"}}>
           {fmt(animSR,plan.currency)}
         </div>
         <div style={{marginTop:14}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-            <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44"}}>SR COVERAGE</span>
-            <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
-              color:parseFloat(ratio)>30?"#69FF47":parseFloat(ratio)>10?"#FFD600":"#FF1744"}}>{ratio}%</span>
+            <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)"}}>SR COVERAGE</span>
+            <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
+              color:parseFloat(ratio)>30?"#159A56":parseFloat(ratio)>10?"#E08A00":"#DC3B3B"}}>{ratio}%</span>
           </div>
-          <div style={{height:6,background:"#ffffff0a",borderRadius:3,overflow:"hidden"}}>
+          <div style={{height:6,background:"rgba(var(--ink-rgb),0.039)",borderRadius:3,overflow:"hidden"}}>
             <div style={{height:"100%",width:`${Math.min(parseFloat(ratio),100)}%`,borderRadius:3,transition:"width .8s ease",
-              background:parseFloat(ratio)>30?"linear-gradient(90deg,#69FF47,#00C853)":parseFloat(ratio)>10?"linear-gradient(90deg,#FFD600,#FF8F00)":"linear-gradient(90deg,#FF1744,#D50000)",
-              boxShadow:parseFloat(ratio)>30?"0 0 10px #69FF4788":parseFloat(ratio)>10?"0 0 10px #FFD60088":"0 0 10px #FF174488"}}/>
+              background:parseFloat(ratio)>30?"linear-gradient(90deg,#159A56,#159A56)":parseFloat(ratio)>10?"linear-gradient(90deg,#E08A00,#FF8F00)":"linear-gradient(90deg,#DC3B3B,#D50000)",
+              boxShadow:parseFloat(ratio)>30?"0 0 10px #159A5688":parseFloat(ratio)>10?"0 0 10px #E08A0088":"0 0 10px #DC3B3B88"}}/>
           </div>
           <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
-            <div><div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",letterSpacing:2}}>TOTAL TO SR</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,color:"#FFD600",marginTop:2}}>{fmt(st.totalSR||0,plan.currency)}</div></div>
-            <div style={{textAlign:"right"}}><div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff22",letterSpacing:2}}>TOTAL ROI</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,color:parseFloat(roi)>=0?"#69FF47":"#FF1744",marginTop:2}}>
+            <div><div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:2}}>TOTAL TO SR</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:"#E08A00",marginTop:2}}>{fmt(st.totalSR||0,plan.currency)}</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:2}}>TOTAL ROI</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:parseFloat(roi)>=0?"#159A56":"#DC3B3B",marginTop:2}}>
                 {parseFloat(roi)>=0?"+":""}{roi}%
               </div></div>
           </div>
         </div>
       </div>
       <div style={S.glassCard}>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff22",letterSpacing:3,marginBottom:12}}>METRICS</div>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:12}}>METRICS</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {[["DAYS RUN",st.day-1,preset.color],["WINS",(st.history||[]).filter(h=>h.result==="WIN").length,"#69FF47"],
-            ["LOSSES",st.losses||0,"#FF1744"],["STREAK",st.streak||0,"#FFD600"],
-            ["TOTAL VALUE",fmt(total,plan.currency),"#69FF47"],["WD EVENTS",wdHist.length,"#FFD600"]
+          {[["DAYS RUN",st.day-1,preset.color],["WINS",(st.history||[]).filter(h=>h.result==="WIN").length,"#159A56"],
+            ["LOSSES",st.losses||0,"#DC3B3B"],["STREAK",st.streak||0,"#E08A00"],
+            ["TOTAL VALUE",fmt(total,plan.currency),"#159A56"],["WD EVENTS",wdHist.length,"#E08A00"]
           ].map(([l,v,col],i)=>(
-            <div key={i} style={{background:"#ffffff04",border:`1px solid ${col}15`,borderRadius:10,padding:"10px 12px",position:"relative",overflow:"hidden"}}>
+            <div key={i} style={{background:"rgba(var(--ink-rgb),0.016)",border:`1px solid ${col}15`,borderRadius:10,padding:"10px 12px",position:"relative",overflow:"hidden"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${col}33,transparent)`}}/>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"66",letterSpacing:2,marginBottom:6}}>{l}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,color:col,fontSize:13}}>{v}</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:col+"66",letterSpacing:2,marginBottom:6}}>{l}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,color:col,fontSize:13}}>{v}</div>
             </div>
           ))}
         </div>
@@ -1514,15 +1526,15 @@ function SetTab({plan,preset,onDelete}) {
   return(
     <div>
       <div style={S.glassCard}>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff22",letterSpacing:3,marginBottom:12}}>PLAN CONFIG</div>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:12}}>PLAN CONFIG</div>
         {[["Plan",`${preset.emoji} ${preset.label}`],["Odds","× "+plan.odds],
           ["Currency",plan.currency],["Starting",fmt(plan.starting,plan.currency)],
           ["Weekly WD",(plan.wdPct*100).toFixed(0)+"% of AB"],
           ["Milestone WD","35% at milestones"],["Loss Restart","60% of SR → AB"],["SR Protection","40% always kept"]
         ].map(([l,v],i)=>(
           <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-            borderBottom:"1px solid #ffffff06",padding:"11px 0",fontFamily:"'DM Mono',monospace"}}>
-            <span style={{fontSize:10,color:"#ffffff44"}}>{l}</span>
+            borderBottom:"1px solid rgba(var(--ink-rgb),0.024)",padding:"11px 0",fontFamily:"'Inter',sans-serif"}}>
+            <span style={{fontSize:10,color:"rgba(var(--ink-rgb),0.267)"}}>{l}</span>
             <span style={{fontSize:11,fontWeight:700,color:preset.color}}>{v}</span>
           </div>
         ))}
@@ -1530,14 +1542,14 @@ function SetTab({plan,preset,onDelete}) {
       <div style={{marginTop:16}}>
         {!confirm?(
           <button onClick={()=>setConfirm(true)}
-            style={{width:"100%",background:"linear-gradient(135deg,#FF174412,transparent)",
-              border:"1px solid #FF174444",borderRadius:12,color:"#FF1744",
-              fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:12,padding:"14px",cursor:"pointer",letterSpacing:1}}>
+            style={{width:"100%",background:"linear-gradient(135deg,#DC3B3B12,transparent)",
+              border:"1px solid #DC3B3B44",borderRadius:12,color:"#DC3B3B",
+              fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:12,padding:"14px",cursor:"pointer",letterSpacing:1}}>
             ✕ DELETE THIS PLAN
           </button>
         ):(
-          <div style={{...S.glassCard,border:"1px solid #FF174444"}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:11,color:"#FF1744",marginBottom:14,letterSpacing:1}}>
+          <div style={{...S.glassCard,border:"1px solid #DC3B3B44"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:11,color:"#DC3B3B",marginBottom:14,letterSpacing:1}}>
               ⚠ DELETE PLAN {preset.label}? CANNOT BE UNDONE.
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -1571,11 +1583,11 @@ function SetupScreen({presetId,onSetup,onBack}) {
       <div style={{textAlign:"center",marginBottom:32}}>
         <div style={{width:64,height:64,borderRadius:18,background:preset.gradient,display:"flex",
           alignItems:"center",justifyContent:"center",margin:"0 auto 16px",
-          fontSize:28,fontFamily:"'Orbitron',monospace",fontWeight:900,color:"#000",
+          fontSize:28,fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,color:"#000",
           boxShadow:`0 0 40px ${preset.glow}`}}>{preset.emoji}</div>
-        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:26,
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:26,
           color:preset.color,letterSpacing:4,textShadow:`0 0 20px ${preset.glow}`}}>PLAN {preset.label}</div>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff33",marginTop:6,letterSpacing:3}}>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,color:"rgba(var(--ink-rgb),0.2)",marginTop:6,letterSpacing:3}}>
           ×{preset.odds} ODDS · {preset.wdPct*100}% WEEKLY WD
         </div>
       </div>
@@ -1583,17 +1595,17 @@ function SetupScreen({presetId,onSetup,onBack}) {
         <div style={{display:"flex",gap:4,marginBottom:20}}>
           {fields.map((_,i)=>(
             <div key={i} style={{flex:1,height:3,borderRadius:2,transition:"all .4s ease",
-              background:i<=step?preset.gradient:"#ffffff0d",
+              background:i<=step?preset.gradient:"rgba(var(--ink-rgb),0.051)",
               boxShadow:i===step?`0 0 10px ${preset.glow}`:"none"}}/>
           ))}
         </div>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",letterSpacing:3,marginBottom:8}}>STEP {step+1} OF {fields.length}</div>
-        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:15,color:preset.color,letterSpacing:2,marginBottom:14}}>{fields[step].label}</div>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:3,marginBottom:8}}>STEP {step+1} OF {fields.length}</div>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:15,color:preset.color,letterSpacing:2,marginBottom:14}}>{fields[step].label}</div>
         <div style={{display:"flex",gap:8,marginBottom:14}}>
-          {[["ODDS","×"+preset.odds,preset.color],["WEEKLY WD",preset.wdPct*100+"%","#FFD600"]].map(([l,v,col],i)=>(
+          {[["ODDS","×"+preset.odds,preset.color],["WEEKLY WD",preset.wdPct*100+"%","#E08A00"]].map(([l,v,col],i)=>(
             <div key={i} style={{flex:1,background:`${col}0d`,border:`1px solid ${col}33`,borderRadius:10,padding:"8px",textAlign:"center"}}>
-              <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:col+"66",letterSpacing:2,marginBottom:3}}>{l}</div>
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,color:col}}>{v}</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:col+"66",letterSpacing:2,marginBottom:3}}>{l}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:col}}>{v}</div>
             </div>
           ))}
         </div>
@@ -1602,10 +1614,10 @@ function SetupScreen({presetId,onSetup,onBack}) {
           onKeyDown={e=>e.key==="Enter"&&next()} autoFocus
           style={{...S.input,border:`1px solid ${preset.color}44`,boxShadow:`0 0 20px ${preset.glow.replace("0.5","0.08")}`}}/>
         <div style={{display:"flex",gap:10,marginTop:14}}>
-          {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{...S.winBtn,flex:1,background:"transparent",border:"1px solid #ffffff22",color:"#ffffff55",boxShadow:"none"}}>← BACK</button>}
+          {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{...S.winBtn,flex:1,background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.133)",color:"rgba(var(--ink-rgb),0.333)",boxShadow:"none"}}>← BACK</button>}
           <button onClick={next} style={{...S.winBtn,flex:2,
-            background:step===fields.length-1?preset.gradient:"linear-gradient(135deg,#ffffff12,#ffffff06)",
-            color:step===fields.length-1?"#000":"#fff",
+            background:step===fields.length-1?preset.gradient:"linear-gradient(135deg,rgba(var(--ink-rgb),0.071),rgba(var(--ink-rgb),0.024))",
+            color:step===fields.length-1?"#000":"var(--ink)",
             boxShadow:step===fields.length-1?`0 4px 30px ${preset.glow}`:"none"}}>
             {step<fields.length-1?"NEXT →":"🚀 ACTIVATE PLAN"}
           </button>
@@ -1617,16 +1629,16 @@ function SetupScreen({presetId,onSetup,onBack}) {
 
 /* ═══════════════════ TIPS TAB ══════════════════════════════ */
 const MARKET_COLORS = {
-  "Over": "#69FF47", "Under": "#00E5FF", "BTTS": "#E040FB",
-  "Both": "#E040FB", "First": "#FFD600", "Asian": "#FF6D00",
-  "Total": "#FF6D00", "Either": "#E040FB",
-  "Corners": "#FF6D00", "Cards": "#FF1744", "Fouls": "#FF8A65",
-  "Offsides": "#40C4FF", "Shots": "#FFD600", "Throw": "#B388FF",
-  "Highest": "#FFD600", "Clean": "#69FF47"
+  "Over": "#159A56", "Under": "#2F37D9", "BTTS": "#7C83F6",
+  "Both": "#7C83F6", "First": "#E08A00", "Asian": "#E08A00",
+  "Total": "#E08A00", "Either": "#7C83F6",
+  "Corners": "#E08A00", "Cards": "#DC3B3B", "Fouls": "#FF8A65",
+  "Offsides": "#40C4FF", "Shots": "#E08A00", "Throw": "#B388FF",
+  "Highest": "#E08A00", "Clean": "#159A56"
 };
 function marketColor(market) {
   const key = Object.keys(MARKET_COLORS).find(k => market?.startsWith(k));
-  return key ? MARKET_COLORS[key] : "#00E5FF";
+  return key ? MARKET_COLORS[key] : "#2F37D9";
 }
 
 function TipsTab({ plan, st, preset, onTrack }) {
@@ -1694,7 +1706,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
     return true;
   });
 
-  const riskColor = r => r==="LOW"?"#69FF47":r==="MEDIUM"?"#FFD600":"#FF1744";
+  const riskColor = r => r==="LOW"?"#159A56":r==="MEDIUM"?"#E08A00":"#DC3B3B";
 
   return (
     <div>
@@ -1703,9 +1715,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
         border:`1px solid ${preset.color}33`, marginBottom:12, padding:"14px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
-            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:13,
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,
               color:preset.color,letterSpacing:2}}>🤖 MULTI-AI GOALS TIPS</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44",marginTop:3,lineHeight:1.5}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)",marginTop:3,lineHeight:1.5}}>
               {activeAIs.length > 0
                 ? activeAIs.join(" + ") + " active"
                 : "Claude · Gemini · Groq · Goals only"}
@@ -1714,10 +1726,10 @@ function TipsTab({ plan, st, preset, onTrack }) {
               <div style={{display:"flex",gap:5,marginTop:7,flexWrap:"wrap"}}>
                 {activeAIs.map(ai=>(
                   <div key={ai} style={{padding:"2px 8px",borderRadius:20,
-                    background:ai==="Claude"?"#00E5FF15":ai==="Gemini"?"#69FF4715":"#E040FB15",
-                    border:`1px solid ${ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}44`,
-                    fontFamily:"'DM Mono',monospace",fontSize:8,letterSpacing:1,
-                    color:ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}}>
+                    background:ai==="Claude"?"#2F37D915":ai==="Gemini"?"#159A5615":"#7C83F615",
+                    border:`1px solid ${ai==="Claude"?"#2F37D9":ai==="Gemini"?"#159A56":"#7C83F6"}44`,
+                    fontFamily:"'Inter',sans-serif",fontSize:8,letterSpacing:1,
+                    color:ai==="Claude"?"#2F37D9":ai==="Gemini"?"#159A56":"#7C83F6"}}>
                     ✓ {ai}
                   </div>
                 ))}
@@ -1725,14 +1737,14 @@ function TipsTab({ plan, st, preset, onTrack }) {
             )}
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",marginBottom:4}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",marginBottom:4}}>
               {lastFetch ? `Updated ${Math.round((Date.now()-lastFetch)/60000)}m ago` : "Not loaded"}
             </div>
             <button onClick={fetchTips} disabled={loading}
-              style={{background:loading?"#ffffff0a":preset.gradient,
+              style={{background:loading?"rgba(var(--ink-rgb),0.039)":preset.gradient,
                 border:"none",borderRadius:8,padding:"8px 14px",cursor:loading?"not-allowed":"pointer",
-                fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:10,
-                color:loading?"#ffffff44":"#000",letterSpacing:1,
+                fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:10,
+                color:loading?"rgba(var(--ink-rgb),0.267)":"#000",letterSpacing:1,
                 boxShadow:loading?"none":`0 0 20px ${preset.glow}`}}>
               {loading ? "⏳ LOADING..." : "⚡ GET TIPS"}
             </button>
@@ -1740,9 +1752,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
         </div>
 
         {/* Warning */}
-        <div style={{marginTop:10,background:"#FFD60008",border:"1px solid #FFD60022",
-          borderRadius:8,padding:"7px 10px",fontFamily:"'DM Mono',monospace",fontSize:8,
-          color:"#FFD60088",lineHeight:1.6}}>
+        <div style={{marginTop:10,background:"#E08A0008",border:"1px solid #E08A0022",
+          borderRadius:8,padding:"7px 10px",fontFamily:"'Inter',sans-serif",fontSize:8,
+          color:"#E08A0088",lineHeight:1.6}}>
           ⚠ AI tips are analytical suggestions only, not guarantees. Always combine with your own research. Bet responsibly.
         </div>
       </div>
@@ -1753,16 +1765,16 @@ function TipsTab({ plan, st, preset, onTrack }) {
           {[1,2,3,4].map(i=>(
             <div key={i} style={{...S.glassCard,marginBottom:10,padding:14,opacity:0.6}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-                <div style={{background:"#ffffff08",borderRadius:4,height:12,width:"60%",animation:"pulse-load 1.5s ease infinite"}}/>
-                <div style={{background:"#ffffff08",borderRadius:4,height:12,width:"15%",animation:"pulse-load 1.5s ease infinite"}}/>
+                <div style={{background:"rgba(var(--ink-rgb),0.031)",borderRadius:4,height:12,width:"60%",animation:"pulse-load 1.5s ease infinite"}}/>
+                <div style={{background:"rgba(var(--ink-rgb),0.031)",borderRadius:4,height:12,width:"15%",animation:"pulse-load 1.5s ease infinite"}}/>
               </div>
-              <div style={{background:"#ffffff05",borderRadius:4,height:8,width:"40%",marginBottom:8,animation:"pulse-load 1.5s ease infinite"}}/>
-              <div style={{background:"#ffffff05",borderRadius:4,height:8,width:"80%",animation:"pulse-load 1.5s ease infinite"}}/>
+              <div style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:4,height:8,width:"40%",marginBottom:8,animation:"pulse-load 1.5s ease infinite"}}/>
+              <div style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:4,height:8,width:"80%",animation:"pulse-load 1.5s ease infinite"}}/>
               <style>{`@keyframes pulse-load{0%,100%{opacity:.5}50%{opacity:1}}`}</style>
             </div>
           ))}
-          <div style={{textAlign:"center",fontFamily:"'DM Mono',monospace",fontSize:10,
-            color:"#ffffff33",padding:"8px 0",letterSpacing:2,animation:"blink 1s step-end infinite"}}>
+          <div style={{textAlign:"center",fontFamily:"'Inter',sans-serif",fontSize:10,
+            color:"rgba(var(--ink-rgb),0.2)",padding:"8px 0",letterSpacing:2,animation:"blink 1s step-end infinite"}}>
             SEARCHING LIVE MATCHES & ANALYSING STATS...
           </div>
         </div>
@@ -1770,13 +1782,13 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
       {/* Error */}
       {error && !loading && (
-        <div style={{...S.glassCard,border:"1px solid #FF174444",
-          background:"linear-gradient(135deg,#FF174408,transparent)",padding:14}}>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,
-            color:"#FF1744",marginBottom:8}}>✕ FAILED TO LOAD</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#FF174488",
+        <div style={{...S.glassCard,border:"1px solid #DC3B3B44",
+          background:"linear-gradient(135deg,#DC3B3B08,transparent)",padding:14}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+            color:"#DC3B3B",marginBottom:8}}>✕ FAILED TO LOAD</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,color:"#DC3B3B88",
             lineHeight:1.6,marginBottom:12,wordBreak:"break-word"}}>{String(error)}</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",
             lineHeight:1.7}}>
             Make sure you have added your ANTHROPIC_API_KEY to Vercel:<br/>
             Vercel Dashboard → Your Project → Settings → Environment Variables<br/>
@@ -1789,9 +1801,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
       {!loading && !error && tips.length===0 && (
         <div style={{textAlign:"center",padding:"50px 0"}}>
           <div style={{fontSize:48,marginBottom:16}}>⚽</div>
-          <div style={{fontFamily:"'Orbitron',monospace",fontSize:14,color:preset.color,
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:14,color:preset.color,
             letterSpacing:3,marginBottom:8}}>NO TIPS LOADED</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff33",
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,color:"rgba(var(--ink-rgb),0.2)",
             lineHeight:1.8,marginBottom:20}}>
             Tap GET TIPS above to fetch<br/>today's AI-analysed goals markets
           </div>
@@ -1805,9 +1817,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
           {FILTERS.map(f=>(
             <button key={f} onClick={()=>setFilter(f)}
               style={{whiteSpace:"nowrap",padding:"5px 12px",borderRadius:20,border:"none",
-                cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:1,
-                background:filter===f?preset.gradient:"#ffffff08",
-                color:filter===f?"#000":"#ffffff55",
+                cursor:"pointer",fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:1,
+                background:filter===f?preset.gradient:"rgba(var(--ink-rgb),0.031)",
+                color:filter===f?"#000":"rgba(var(--ink-rgb),0.333)",
                 boxShadow:filter===f?`0 0 12px ${preset.glow}`:"none",
                 transition:"all .2s",flexShrink:0}}>
               {f}
@@ -1818,7 +1830,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
       {/* Tips count */}
       {tips.length>0 && !loading && (
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",
           letterSpacing:2,marginBottom:10}}>
           {filtered.length} TIP{filtered.length!==1?"S":""} ·{" "}
           {lastFetch && (() => {
@@ -1843,7 +1855,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
               animation:`fadeUp ${0.2+i*0.05}s ease`}}>
             <div style={{...S.glassCard,marginBottom:0,padding:"14px",
               border:`1px solid ${col}22`,
-              background:`linear-gradient(135deg,${col}06,#0a0d14)`,
+              background:`linear-gradient(135deg,${col}06,var(--surface))`,
               transition:"all .25s"}}>
 
               {/* Top accent */}
@@ -1854,29 +1866,29 @@ function TipsTab({ plan, st, preset, onTrack }) {
               <div style={{display:"flex",justifyContent:"space-between",
                 alignItems:"flex-start",marginBottom:10}}>
                 <div style={{flex:1,paddingRight:8}}>
-                  <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,
-                    fontSize:11,color:"#ffffff",letterSpacing:1,marginBottom:3}}>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,
+                    fontSize:11,color:"var(--ink)",letterSpacing:1,marginBottom:3}}>
                     {tip.match}
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,
-                      color:"#ffffff44"}}>{tip.league}</span>
-                    {tip.time&&<span style={{fontFamily:"'DM Mono',monospace",fontSize:8,
-                      color:"#ffffff33"}}>· {tip.time}</span>}
+                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                      color:"rgba(var(--ink-rgb),0.267)"}}>{tip.league}</span>
+                    {tip.time&&<span style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                      color:"rgba(var(--ink-rgb),0.2)"}}>· {tip.time}</span>}
                   </div>
                 </div>
                 {/* Confidence circle */}
                 <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,flexShrink:0}}>
                   <div style={{width:42,height:42,borderRadius:"50%",
-                    background:`conic-gradient(${col} ${conf*3.6}deg, #ffffff0d 0deg)`,
+                    background:`conic-gradient(${col} ${conf*3.6}deg, rgba(var(--ink-rgb),0.051) 0deg)`,
                     display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                    <div style={{width:32,height:32,borderRadius:"50%",background:"#0a0d14",
+                    <div style={{width:32,height:32,borderRadius:"50%",background:"var(--surface)",
                       display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <span style={{fontFamily:"'Orbitron',monospace",fontWeight:900,
+                      <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,
                         fontSize:9,color:col}}>{conf}</span>
                     </div>
                   </div>
-                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33"}}>CONF%</span>
+                  <span style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)"}}>CONF%</span>
                 </div>
               </div>
 
@@ -1884,41 +1896,41 @@ function TipsTab({ plan, st, preset, onTrack }) {
               <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
                 {tip.confirmed && (
                   <div style={{padding:"4px 10px",borderRadius:20,
-                    background:"linear-gradient(135deg,#FFD60033,#FF8F0022)",
-                    border:"1px solid #FFD60066",
-                    fontFamily:"'DM Mono',monospace",fontSize:8,color:"#FFD600",
+                    background:"linear-gradient(135deg,#E08A0033,#FF8F0022)",
+                    border:"1px solid #E08A0066",
+                    fontFamily:"'Inter',sans-serif",fontSize:8,color:"#E08A00",
                     letterSpacing:1,fontWeight:700}}>
                     🔥 ALL 3 AIs AGREE
                   </div>
                 )}
                 {!tip.confirmed && tip.multiAI && (
                   <div style={{padding:"4px 10px",borderRadius:20,
-                    background:"#00E5FF12",border:"1px solid #00E5FF44",
-                    fontFamily:"'DM Mono',monospace",fontSize:8,color:"#00E5FF",letterSpacing:1}}>
+                    background:"#2F37D912",border:"1px solid #2F37D944",
+                    fontFamily:"'Inter',sans-serif",fontSize:8,color:"#2F37D9",letterSpacing:1}}>
                     ✦ {tip.aiCount} AIs AGREE
                   </div>
                 )}
                 <div style={{background:`${col}18`,border:`1px solid ${col}44`,
                   borderRadius:8,padding:"6px 12px",
-                  fontFamily:"'Orbitron',monospace",fontWeight:700,
+                  fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,
                   fontSize:12,color:col,letterSpacing:1,
                   boxShadow:`0 0 15px ${col}33`}}>
                   {tip.pick}
                 </div>
                 <div style={{background:`${rCol}12`,border:`1px solid ${rCol}33`,
                   borderRadius:20,padding:"4px 10px",
-                  fontFamily:"'DM Mono',monospace",fontSize:8,
+                  fontFamily:"'Inter',sans-serif",fontSize:8,
                   color:rCol,letterSpacing:1}}>
                   {tip.risk} RISK
                 </div>
                 {/* Odds display - real or estimated */}
                 {(tip.bookmaker_odds || tip.odds_range) && (
                   <div style={{
-                    background: tip.real_odds_available ? "#69FF4720" : "#ffffff08",
-                    border: tip.real_odds_available ? "1px solid #69FF4766" : "1px solid #ffffff22",
+                    background: tip.real_odds_available ? "#159A5620" : "rgba(var(--ink-rgb),0.031)",
+                    border: tip.real_odds_available ? "1px solid #159A5666" : "1px solid rgba(var(--ink-rgb),0.133)",
                     borderRadius:20, padding:"4px 10px",
-                    fontFamily:"'DM Mono',monospace", fontSize:8,
-                    color: tip.real_odds_available ? "#69FF47" : "#ffffff55",
+                    fontFamily:"'Inter',sans-serif", fontSize:8,
+                    color: tip.real_odds_available ? "#159A56" : "rgba(var(--ink-rgb),0.333)",
                     letterSpacing:1
                   }}>
                     {tip.real_odds_available
@@ -1930,10 +1942,10 @@ function TipsTab({ plan, st, preset, onTrack }) {
                 {/* Value badge - show for all tips with positive edge */}
                 {tip.edge_pct && tip.value > 0 && (
                   <div style={{
-                    background:"#FFD60020", border:"1px solid #FFD60066",
+                    background:"#E08A0020", border:"1px solid #E08A0066",
                     borderRadius:20, padding:"4px 10px",
-                    fontFamily:"'DM Mono',monospace", fontSize:8,
-                    color:"#FFD600", letterSpacing:1, fontWeight:700,
+                    fontFamily:"'Inter',sans-serif", fontSize:8,
+                    color:"#E08A00", letterSpacing:1, fontWeight:700,
                   }}>
                     ⚡ {tip.edge_pct} EDGE
                   </div>
@@ -1942,7 +1954,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
               {/* Market tag + Smart Stake */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff44"}}>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.267)"}}>
                   📊 {tip.market}
                 </div>
                 {bankroll > 0 && (() => {
@@ -1955,7 +1967,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
                       background:`${rating.color}18`,
                       border:`1px solid ${rating.color}44`,
                       borderRadius:20, padding:"3px 10px",
-                      fontFamily:"'DM Mono',monospace", fontSize:8,
+                      fontFamily:"'Inter',sans-serif", fontSize:8,
                       color:rating.color, letterSpacing:1,
                     }}>
                       💰 {fmt(stake, plan.currency)}
@@ -1965,40 +1977,40 @@ function TipsTab({ plan, st, preset, onTrack }) {
               </div>
 
               {/* Confidence bar */}
-              <div style={{height:3,background:"#ffffff08",borderRadius:2,marginBottom:10,overflow:"hidden"}}>
+              <div style={{height:3,background:"rgba(var(--ink-rgb),0.031)",borderRadius:2,marginBottom:10,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${conf}%`,borderRadius:2,
                   background:`linear-gradient(90deg,${col}88,${col})`,
                   boxShadow:`0 0 8px ${col}66`,transition:"width .8s ease"}}/>
               </div>
 
               {/* Expand arrow */}
-              <div style={{textAlign:"center",fontFamily:"'DM Mono',monospace",
-                fontSize:9,color:"#ffffff22",letterSpacing:2}}>
+              <div style={{textAlign:"center",fontFamily:"'Inter',sans-serif",
+                fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:2}}>
                 {isExp?"▲ HIDE ANALYSIS":"▼ SEE ANALYSIS"}
               </div>
 
               {/* Expanded detail */}
               {isExp && (
-                <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #ffffff08",
+                <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid rgba(var(--ink-rgb),0.031)",
                   animation:"fadeUp .2s ease"}}>
                   {/* Reasoning */}
-                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
-                    color:"#ffffff77",lineHeight:1.7,marginBottom:12}}>
+                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                    color:"rgba(var(--ink-rgb),0.467)",lineHeight:1.7,marginBottom:12}}>
                     {tip.reasoning}
                   </div>
 
                   {/* Key stats */}
                   {tip.key_stats?.length>0 && (
                     <div>
-                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                      <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
                         color:col+"88",letterSpacing:2,marginBottom:8}}>KEY STATS</div>
                       {tip.key_stats.map((s,j)=>(
                         <div key={j} style={{display:"flex",gap:8,alignItems:"flex-start",
                           marginBottom:6}}>
                           <div style={{width:4,height:4,borderRadius:"50%",
                             background:col,marginTop:5,flexShrink:0}}/>
-                          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,
-                            color:"#ffffff55",lineHeight:1.5}}>{s}</div>
+                          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                            color:"rgba(var(--ink-rgb),0.333)",lineHeight:1.5}}>{s}</div>
                         </div>
                       ))}
                     </div>
@@ -2006,25 +2018,25 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
                   {/* Value Analysis - shown when real odds available */}
                   {tip.real_odds_available && (
-                    <div style={{marginTop:10,background:"#FFD60008",borderRadius:8,
-                      padding:"10px 12px",border:"1px solid #FFD60033"}}>
-                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
-                        color:"#FFD60088",letterSpacing:2,marginBottom:8}}>VALUE ANALYSIS</div>
+                    <div style={{marginTop:10,background:"#E08A0008",borderRadius:8,
+                      padding:"10px 12px",border:"1px solid #E08A0033"}}>
+                      <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                        color:"#E08A0088",letterSpacing:2,marginBottom:8}}>VALUE ANALYSIS</div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                         {[
-                          ["REAL ODDS", tip.bookmaker_odds, "#69FF47"],
-                          ["OUR PROB", tip.predicted_probability ? `${(tip.predicted_probability*100).toFixed(0)}%` : "N/A", "#00E5FF"],
-                          ["EDGE", tip.edge_pct || "N/A", tip.is_value_bet ? "#FFD600" : "#FF1744"],
-                          ["STAKE", tip.recommended_stake_pct ? `${tip.recommended_stake_pct}% bankroll` : "Standard", "#E040FB"],
+                          ["REAL ODDS", tip.bookmaker_odds, "#159A56"],
+                          ["OUR PROB", tip.predicted_probability ? `${(tip.predicted_probability*100).toFixed(0)}%` : "N/A", "#2F37D9"],
+                          ["EDGE", tip.edge_pct || "N/A", tip.is_value_bet ? "#E08A00" : "#DC3B3B"],
+                          ["STAKE", tip.recommended_stake_pct ? `${tip.recommended_stake_pct}% bankroll` : "Standard", "#7C83F6"],
                         ].map(([l,v,c])=>(
-                          <div key={l} style={{background:"#ffffff04",borderRadius:6,padding:"6px 8px"}}>
-                            <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:2}}>{l}</div>
-                            <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:c,marginTop:2}}>{v}</div>
+                          <div key={l} style={{background:"rgba(var(--ink-rgb),0.016)",borderRadius:6,padding:"6px 8px"}}>
+                            <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2}}>{l}</div>
+                            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:c,marginTop:2}}>{v}</div>
                           </div>
                         ))}
                       </div>
-                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
-                        color:"#ffffff33",marginTop:8}}>
+                      <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                        color:"rgba(var(--ink-rgb),0.2)",marginTop:8}}>
                         Source: {tip.odds_source || "The Odds API"}
                       </div>
                     </div>
@@ -2040,7 +2052,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
                     return (
                       <div style={{marginTop:10,background:`${rating.color}10`,
                         border:`1px solid ${rating.color}33`,borderRadius:8,padding:"10px 12px"}}>
-                        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
                           color:rating.color,letterSpacing:2,marginBottom:8}}>
                           SMART STAKE (KELLY CRITERION)
                         </div>
@@ -2048,15 +2060,15 @@ function TipsTab({ plan, st, preset, onTrack }) {
                           {[
                             ["STAKE", fmt(stake,plan.currency), rating.color],
                             ["USD", `$${(stake/TSH_TO_USD).toFixed(2)}`, rating.color],
-                            ["EDGE", `${val>=0?"+":""}${(val*100).toFixed(1)}%`, val>=0?"#69FF47":"#FF1744"],
+                            ["EDGE", `${val>=0?"+":""}${(val*100).toFixed(1)}%`, val>=0?"#159A56":"#DC3B3B"],
                           ].map(([l,v,c])=>(
-                            <div key={l} style={{background:"#ffffff06",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
-                              <div style={{fontFamily:"'DM Mono',monospace",fontSize:7,color:"#ffffff33",letterSpacing:1,marginBottom:3}}>{l}</div>
-                              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:10,color:c}}>{v}</div>
+                            <div key={l} style={{background:"rgba(var(--ink-rgb),0.024)",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
+                              <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:1,marginBottom:3}}>{l}</div>
+                              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,color:c}}>{v}</div>
                             </div>
                           ))}
                         </div>
-                        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
+                        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
                           color:rating.color,fontWeight:700}}>
                           {rating.label} · {rating.pct} of {fmt(bankroll,plan.currency)} bankroll
                         </div>
@@ -2066,15 +2078,15 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
                   {/* AI Sources */}
                   {tip.ais && tip.ais.length > 0 && (
-                    <div style={{marginTop:10,background:"#ffffff04",borderRadius:8,padding:"8px 10px",border:"1px solid #ffffff08"}}>
-                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff33",letterSpacing:2,marginBottom:6}}>CONFIRMED BY</div>
+                    <div style={{marginTop:10,background:"rgba(var(--ink-rgb),0.016)",borderRadius:8,padding:"8px 10px",border:"1px solid rgba(var(--ink-rgb),0.031)"}}>
+                      <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2,marginBottom:6}}>CONFIRMED BY</div>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                         {tip.ais.map(ai=>(
                           <div key={ai} style={{padding:"3px 10px",borderRadius:20,
-                            background:ai==="Claude"?"#00E5FF12":ai==="Gemini"?"#69FF4712":"#E040FB12",
-                            border:`1px solid ${ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}44`,
-                            fontFamily:"'DM Mono',monospace",fontSize:9,
-                            color:ai==="Claude"?"#00E5FF":ai==="Gemini"?"#69FF47":"#E040FB"}}>
+                            background:ai==="Claude"?"#2F37D912":ai==="Gemini"?"#159A5612":"#7C83F612",
+                            border:`1px solid ${ai==="Claude"?"#2F37D9":ai==="Gemini"?"#159A56":"#7C83F6"}44`,
+                            fontFamily:"'Inter',sans-serif",fontSize:9,
+                            color:ai==="Claude"?"#2F37D9":ai==="Gemini"?"#159A56":"#7C83F6"}}>
                             ✓ {ai}
                           </div>
                         ))}
@@ -2083,11 +2095,11 @@ function TipsTab({ plan, st, preset, onTrack }) {
                   )}
 
                   {/* Match to plan */}
-                  <div style={{marginTop:12,background:"#ffffff04",borderRadius:8,
-                    padding:"8px 10px",border:"1px solid #ffffff08"}}>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,
-                      color:"#ffffff33",letterSpacing:2,marginBottom:4}}>PLAN MATCH</div>
-                    <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55",lineHeight:1.6}}>
+                  <div style={{marginTop:12,background:"rgba(var(--ink-rgb),0.016)",borderRadius:8,
+                    padding:"8px 10px",border:"1px solid rgba(var(--ink-rgb),0.031)"}}>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                      color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2,marginBottom:4}}>PLAN MATCH</div>
+                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.333)",lineHeight:1.6}}>
                       {(() => {
                         const o = tip.bookmaker_odds || parseFloat((tip.odds_range||"").split("-")[0]);
                         if(o >= 1.05 && o <= 1.15) return "✦ Fits Plan ALPHA (×1.10)";
@@ -2106,7 +2118,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
       {/* Footer note */}
       {tips.length>0 && !loading && (
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff18",
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.094)",
           textAlign:"center",padding:"8px 0 4px",lineHeight:1.7,letterSpacing:1}}>
           TIPS REFRESH EVERY 30 MIN · FOR RESEARCH PURPOSES ONLY<br/>
           NEVER BET MORE THAN YOUR DAILY ROLLOVER STAKE
@@ -2118,11 +2130,19 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
 /* ═══════════════════ GLOBAL CSS ════════════════════════════ */
 function GlobalCSS(){return(<style>{`
-  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+  :root{
+    --paper:#F4F4F1; --surface:#FFFFFF;
+    --ink-rgb:24,25,29; --ink:#18191D; --sheen-rgb:24,25,29;
+  }
+  :root[data-theme="dark"]{
+    --paper:#0F1014; --surface:#181A20;
+    --ink-rgb:241,242,239; --ink:#F1F2EF; --sheen-rgb:255,255,255;
+  }
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#030508;-webkit-tap-highlight-color:transparent;overflow-x:hidden;}
-  ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:#030508;}
-  ::-webkit-scrollbar-thumb{background:#00E5FF22;border-radius:2px;}
+  body{background:var(--paper);color:var(--ink);-webkit-tap-highlight-color:transparent;overflow-x:hidden;transition:background-color .25s ease,color .25s ease;}
+  ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:var(--paper);}
+  ::-webkit-scrollbar-thumb{background:#2F37D922;border-radius:2px;}
   @keyframes fadeUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
   @keyframes logoReveal{0%{opacity:0;letter-spacing:20px}100%{opacity:1;letter-spacing:6px}}
   @keyframes barFill{0%{width:0}100%{width:100%}}
@@ -2135,34 +2155,34 @@ function GlobalCSS(){return(<style>{`
 
 /* ═══════════════════ STYLES ════════════════════════════════ */
 const S={
-  root:{background:"#030508",minHeight:"100vh",maxWidth:430,margin:"0 auto",position:"relative"},
+  root:{background:"var(--paper)",minHeight:"100vh",maxWidth:430,margin:"0 auto",position:"relative"},
   screen:{padding:"0 16px 32px",paddingTop:16,position:"relative",zIndex:1},
   splash:{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",position:"relative",zIndex:1},
-  splashLogo:{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:40,color:"#00E5FF",
-    letterSpacing:6,textShadow:"0 0 40px rgba(0,229,255,0.8),0 0 80px rgba(0,229,255,0.4)",
+  splashLogo:{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:40,color:"#2F37D9",
+    letterSpacing:6,textShadow:"0 0 40px rgba(47,55,217,0.8),0 0 80px rgba(47,55,217,0.4)",
     animation:"logoReveal 1.2s ease forwards"},
-  splashSub:{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff33",letterSpacing:4,marginTop:8},
-  splashBar:{height:2,background:"#ffffff08",borderRadius:2,marginTop:24,overflow:"hidden"},
-  splashFill:{height:"100%",background:"linear-gradient(90deg,#00E5FF,#E040FB)",borderRadius:2,animation:"barFill 1.6s ease forwards"},
-  homeHeader:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"20px 0 16px",borderBottom:"1px solid #ffffff08",marginBottom:14},
-  homeTitle:{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:30,color:"#00E5FF",letterSpacing:4,textShadow:"0 0 30px rgba(0,229,255,0.6)",lineHeight:1},
-  homeSub:{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff33",letterSpacing:3,marginTop:4},
-  vBadge:{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#00E5FF88",border:"1px solid #00E5FF33",borderRadius:20,padding:"3px 10px",letterSpacing:2},
-  headerBtn:{background:"#ffffff08",border:"1px solid #ffffff11",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:14,color:"#fff"},
-  noticeBar:{background:"linear-gradient(135deg,#00E5FF0a,transparent)",border:"1px solid #00E5FF18",borderRadius:10,padding:"8px 12px",display:"flex",alignItems:"center",gap:8},
-  combinedCard:{background:"linear-gradient(135deg,#00E5FF08,#ffffff02)",border:"1px solid #00E5FF22",borderRadius:16,padding:"14px 16px",marginBottom:18,boxShadow:"0 0 30px rgba(0,229,255,0.05)"},
-  combinedVal:{fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:20,color:"#00E5FF",textShadow:"0 0 20px rgba(0,229,255,0.5)",marginTop:4},
-  planCard:{background:"#0a0d14",borderRadius:16,padding:"16px 14px",position:"relative",overflow:"hidden",transition:"all .25s ease",animation:"float 4s ease-in-out infinite"},
-  glassCard:{background:"linear-gradient(135deg,#0d1117,#0a0d14)",border:"1px solid #ffffff0d",borderRadius:14,padding:14,marginBottom:10,position:"relative",overflow:"hidden"},
-  backBtn:{background:"none",border:"none",color:"#00E5FF88",fontFamily:"'DM Mono',monospace",fontSize:11,cursor:"pointer",padding:"4px 0",letterSpacing:2},
-  winBtn:{background:"linear-gradient(135deg,#69FF47,#00C853)",border:"none",borderRadius:14,color:"#001a00",padding:"16px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:12,transition:"all .2s",position:"relative",overflow:"hidden"},
-  lossBtn:{background:"linear-gradient(135deg,#FF1744,#B71C1C)",border:"none",borderRadius:14,color:"#fff0f0",padding:"16px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"'Orbitron',monospace",fontWeight:900,fontSize:12,transition:"all .2s",position:"relative",overflow:"hidden"},
-  input:{width:"100%",background:"#ffffff05",border:"1px solid #ffffff15",borderRadius:10,padding:"14px",color:"#fff",fontFamily:"'DM Mono',monospace",fontSize:13},
-  toast:{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",padding:"10px 20px",borderRadius:30,fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:700,zIndex:300,whiteSpace:"nowrap",maxWidth:"92vw",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:1,backdropFilter:"blur(10px)"},
-  syncDot:{position:"fixed",top:8,right:16,zIndex:400,display:"flex",alignItems:"center",gap:6},
+  splashSub:{fontFamily:"'Inter',sans-serif",fontSize:10,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:4,marginTop:8},
+  splashBar:{height:2,background:"rgba(var(--ink-rgb),0.031)",borderRadius:2,marginTop:24,overflow:"hidden"},
+  splashFill:{height:"100%",background:"linear-gradient(90deg,#2F37D9,#7C83F6)",borderRadius:2,animation:"barFill 1.6s ease forwards"},
+  homeHeader:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"20px 0 16px",borderBottom:"1px solid rgba(var(--ink-rgb),0.031)",marginBottom:14},
+  homeTitle:{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:30,color:"#2F37D9",letterSpacing:4,textShadow:"0 0 30px rgba(47,55,217,0.6)",lineHeight:1},
+  homeSub:{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:3,marginTop:4},
+  vBadge:{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#2F37D988",border:"1px solid #2F37D933",borderRadius:20,padding:"3px 10px",letterSpacing:2},
+  headerBtn:{background:"rgba(var(--ink-rgb),0.031)",border:"1px solid rgba(var(--ink-rgb),0.067)",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:14,color:"var(--ink)"},
+  noticeBar:{background:"linear-gradient(135deg,#2F37D90a,transparent)",border:"1px solid #2F37D918",borderRadius:10,padding:"8px 12px",display:"flex",alignItems:"center",gap:8},
+  combinedCard:{background:"linear-gradient(135deg,#2F37D908,rgba(var(--ink-rgb),0.008))",border:"1px solid #2F37D922",borderRadius:16,padding:"14px 16px",marginBottom:18,boxShadow:"0 0 30px rgba(47,55,217,0.05)"},
+  combinedVal:{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:20,color:"#2F37D9",textShadow:"0 0 20px rgba(47,55,217,0.5)",marginTop:4},
+  planCard:{background:"var(--surface)",borderRadius:16,padding:"16px 14px",position:"relative",overflow:"hidden",transition:"all .25s ease",animation:"float 4s ease-in-out infinite"},
+  glassCard:{background:"linear-gradient(135deg,var(--surface),var(--surface))",border:"1px solid rgba(var(--ink-rgb),0.051)",borderRadius:14,padding:14,marginBottom:10,position:"relative",overflow:"hidden"},
+  backBtn:{background:"none",border:"none",color:"#2F37D988",fontFamily:"'Inter',sans-serif",fontSize:11,cursor:"pointer",padding:"4px 0",letterSpacing:2},
+  winBtn:{background:"linear-gradient(135deg,#159A56,#159A56)",border:"none",borderRadius:14,color:"#001a00",padding:"16px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:12,transition:"all .2s",position:"relative",overflow:"hidden"},
+  lossBtn:{background:"linear-gradient(135deg,#DC3B3B,#B0302F)",border:"none",borderRadius:14,color:"#fff0f0",padding:"16px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:12,transition:"all .2s",position:"relative",overflow:"hidden"},
+  input:{width:"100%",background:"rgba(var(--ink-rgb),0.02)",border:"1px solid rgba(var(--ink-rgb),0.082)",borderRadius:10,padding:"14px",color:"var(--ink)",fontFamily:"'Inter',sans-serif",fontSize:13},
+  toast:{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",padding:"10px 20px",borderRadius:30,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:700,zIndex:300,whiteSpace:"nowrap",maxWidth:"92vw",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:1,backdropFilter:"blur(10px)"},
+  syncDot:{position:"fixed",top:13,right:56,zIndex:400,display:"flex",alignItems:"center",gap:6},
   modal:{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(3,5,8,0.85)",backdropFilter:"blur(12px)",padding:24},
-  modalBox:{background:"linear-gradient(135deg,#0d1117,#0a0d14)",border:"1px solid #00E5FF22",borderRadius:18,padding:24,width:"100%",maxWidth:380},
-  actionBtn:{padding:"12px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:700,letterSpacing:1},
+  modalBox:{background:"linear-gradient(135deg,var(--surface),var(--surface))",border:"1px solid #2F37D922",borderRadius:18,padding:24,width:"100%",maxWidth:380},
+  actionBtn:{padding:"12px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,letterSpacing:1},
 };
 
 
@@ -2198,15 +2218,15 @@ function ArchiveTab({plan, st, preset}){
   const hist = archive.slice().sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0))
     .filter(a=> !ql || (`${a.match} ${a.league} ${a.market} ${a.pick}`).toLowerCase().includes(ql));
 
-  const tk={fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff55",letterSpacing:2,marginBottom:4};
-  const tv={fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:18,color:"#fff"};
-  const accCol=(p)=> p>=55?"#69FF47":p>=45?"#FFD600":"#FF1744";
+  const tk={fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.333)",letterSpacing:2,marginBottom:4};
+  const tv={fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:18,color:"var(--ink)"};
+  const accCol=(p)=> p>=55?"#159A56":p>=45?"#E08A00":"#DC3B3B";
 
   if(archive.length===0){
     return (
       <div style={{...S.glassCard, textAlign:"center", padding:"30px 18px"}}>
-        <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:14,color:"#fff",marginBottom:8}}>ARCHIVE EMPTY</div>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#ffffff66",lineHeight:1.7}}>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:"var(--ink)",marginBottom:8}}>ARCHIVE EMPTY</div>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:11,color:"rgba(var(--ink-rgb),0.4)",lineHeight:1.7}}>
           Finished tips move here automatically when you pull new tips, or when you tap
           {" \u201cClear & Archive\u201d"} in Results. Your full history and accuracy breakdowns build up here for analysis.
         </div>
@@ -2216,14 +2236,14 @@ function ArchiveTab({plan, st, preset}){
 
   const BreakBlock = ({title, rows})=> (
     <div style={{...S.glassCard, marginBottom:12}}>
-      <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color,letterSpacing:2,marginBottom:12}}>{title}</div>
+      <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:preset.color,letterSpacing:2,marginBottom:12}}>{title}</div>
       {rows.slice(0,12).map((r,i)=>(
         <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",
-          borderBottom:i<Math.min(rows.length,12)-1?"1px solid #ffffff0d":"none"}}>
-          <div style={{flex:1,minWidth:0,fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffffcc",
+          borderBottom:i<Math.min(rows.length,12)-1?"1px solid rgba(var(--ink-rgb),0.051)":"none"}}>
+          <div style={{flex:1,minWidth:0,fontFamily:"'Inter',sans-serif",fontSize:10,color:"rgba(var(--ink-rgb),0.8)",
             whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.k}</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#ffffff55"}}>{r.w}W-{r.l}L</div>
-          <div style={{width:42,textAlign:"right",fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:12,color:accCol(r.acc)}}>{r.acc}%</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.333)"}}>{r.w}W-{r.l}L</div>
+          <div style={{width:42,textAlign:"right",fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:accCol(r.acc)}}>{r.acc}%</div>
         </div>
       ))}
     </div>
@@ -2233,34 +2253,34 @@ function ArchiveTab({plan, st, preset}){
     <div>
       {/* lifetime summary */}
       <div style={S.glassCard}>
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:preset.color,
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:preset.color,
           letterSpacing:3,marginBottom:14}}>ARCHIVE · LIFETIME</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div style={{...S.glassCard,margin:0,padding:"12px"}}>
             <div style={tk}>TIP ACCURACY</div>
-            <div style={{...tv,color:acc!=null?accCol(acc):"#fff"}}>{acc!=null?acc+"%":"—"}</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>{wins}W · {losses}L</div>
+            <div style={{...tv,color:acc!=null?accCol(acc):"var(--ink)"}}>{acc!=null?acc+"%":"—"}</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",marginTop:3}}>{wins}W · {losses}L</div>
           </div>
           <div style={{...S.glassCard,margin:0,padding:"12px"}}>
             <div style={tk}>TIPS ARCHIVED</div>
             <div style={{...tv,color:preset.color}}>{archive.length}</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>{graded} graded</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",marginTop:3}}>{graded} graded</div>
           </div>
           <div style={{...S.glassCard,margin:0,padding:"12px"}}>
             <div style={tk}>P&L (STAKED)</div>
-            <div style={{...tv,color:totalProfit>=0?"#69FF47":"#FF1744"}}>{totalProfit>=0?"+":""}{fmt(Math.round(totalProfit), plan.currency)}</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>{staked.length} staked</div>
+            <div style={{...tv,color:totalProfit>=0?"#159A56":"#DC3B3B"}}>{totalProfit>=0?"+":""}{fmt(Math.round(totalProfit), plan.currency)}</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",marginTop:3}}>{staked.length} staked</div>
           </div>
           <div style={{...S.glassCard,margin:0,padding:"12px"}}>
             <div style={tk}>ROI</div>
-            <div style={{...tv,color:roi==null?"#fff":roi>=0?"#69FF47":"#FF1744"}}>{roi==null?"—":(roi>=0?"+":"")+roi.toFixed(1)+"%"}</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>on {fmt(Math.round(totalStake), plan.currency)}</div>
+            <div style={{...tv,color:roi==null?"var(--ink)":roi>=0?"#159A56":"#DC3B3B"}}>{roi==null?"—":(roi>=0?"+":"")+roi.toFixed(1)+"%"}</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",marginTop:3}}>on {fmt(Math.round(totalStake), plan.currency)}</div>
           </div>
         </div>
         <button onClick={()=>exportArchiveCSV(archive, plan)}
           style={{width:"100%",background:`linear-gradient(135deg,${preset.color}22,${preset.color}11)`,
             border:`1px solid ${preset.color}55`,borderRadius:10,color:preset.color,
-            fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:11,padding:"11px",cursor:"pointer",letterSpacing:1}}>
+            fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:11,padding:"11px",cursor:"pointer",letterSpacing:1}}>
           {"\u2b07 EXPORT CSV FOR ANALYSIS"}
         </button>
       </div>
@@ -2271,36 +2291,36 @@ function ArchiveTab({plan, st, preset}){
       {/* history + search */}
       <div style={S.glassCard}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:preset.color,letterSpacing:2}}>HISTORY · {archive.length}</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:preset.color,letterSpacing:2}}>HISTORY · {archive.length}</div>
         </div>
         <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search match, league, market…"
           style={{...S.input,marginBottom:12,fontSize:12,padding:"9px 11px"}}/>
-        {hist.length===0 && <div style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#ffffff44",textAlign:"center",padding:"14px 0"}}>No matches.</div>}
+        {hist.length===0 && <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,color:"rgba(var(--ink-rgb),0.267)",textAlign:"center",padding:"14px 0"}}>No matches.</div>}
         {hist.slice(0,200).map((a,i)=>{
-          const col = a.result==="WIN"?"#69FF47":a.result==="LOSS"?"#FF1744":"#ffffff55";
+          const col = a.result==="WIN"?"#159A56":a.result==="LOSS"?"#DC3B3B":"rgba(var(--ink-rgb),0.333)";
           return (
             <div key={a.id||i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",
-              borderBottom:i<Math.min(hist.length,200)-1?"1px solid #ffffff0d":"none"}}>
+              borderBottom:i<Math.min(hist.length,200)-1?"1px solid rgba(var(--ink-rgb),0.051)":"none"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:10.5,color:"#fff",
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:10.5,color:"var(--ink)",
                   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.match}</div>
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:8.5,color:"#ffffff55",marginTop:3,
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,color:"rgba(var(--ink-rgb),0.333)",marginTop:3,
                   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                   {a.pick}{a.score?` · ${a.score}`:""}{a.date?` · ${a.date}`:""}
                 </div>
               </div>
               {a.stake>0 && (
-                <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:a.profitTSH>=0?"#69FF47":"#FF1744",flexShrink:0}}>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:a.profitTSH>=0?"#159A56":"#DC3B3B",flexShrink:0}}>
                   {a.profitTSH>=0?"+":""}{fmt(Math.round(a.profitTSH), plan.currency)}
                 </div>
               )}
-              <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:col,flexShrink:0,width:16,textAlign:"center"}}>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:col,flexShrink:0,width:16,textAlign:"center"}}>
                 {a.result==="WIN"?"\u2713":a.result==="LOSS"?"\u2715":"\u00b7"}
               </div>
             </div>
           );
         })}
-        {hist.length>200 && <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",textAlign:"center",marginTop:10}}>Showing 200 of {hist.length} — export CSV for the full set.</div>}
+        {hist.length>200 && <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",textAlign:"center",marginTop:10}}>Showing 200 of {hist.length} — export CSV for the full set.</div>}
       </div>
     </div>
   );
@@ -2312,59 +2332,59 @@ function PendingTipRow({ tip, preset, onSettle, onRemove }){
   const valid = isFinite(s) && s > 0;
   const odds = tip.odds || 1.85;
   const auto = tip.autoResult; // "WIN" | "LOSS" | undefined
-  const autoCol = auto==="WIN" ? "#69FF47" : "#FF1744";
+  const autoCol = auto==="WIN" ? "#159A56" : "#DC3B3B";
   return (
-    <div style={{background: auto?`${autoCol}0c`:"#ffffff05",
-      border:`1px solid ${auto?autoCol+"44":"#ffffff10"}`,borderRadius:10,
+    <div style={{background: auto?`${autoCol}0c`:"rgba(var(--ink-rgb),0.02)",
+      border:`1px solid ${auto?autoCol+"44":"rgba(var(--ink-rgb),0.063)"}`,borderRadius:10,
       padding:"11px 12px",marginBottom:8}}>
       {auto && (
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,
           padding:"7px 10px",borderRadius:8,background:`${autoCol}14`,border:`1px solid ${autoCol}33`}}>
-          <span style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:autoCol}}>
+          <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:autoCol}}>
             {auto==="WIN"?"✓ TIP WON":"✕ TIP LOST"}{tip.autoScore?` · ${tip.autoScore}`:""}
           </span>
-          <span style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff66",marginLeft:"auto"}}>auto-graded</span>
+          <span style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.4)",marginLeft:"auto"}}>auto-graded</span>
         </div>
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,color:"#fff",
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:"var(--ink)",
             whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tip.match}</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:8,color:"#ffffff44",marginTop:3}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.267)",marginTop:3}}>
             {tip.league}{tip.market?` · ${tip.market}`:""}
           </div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#00E5FFcc",marginTop:4}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#2F37D9cc",marginTop:4}}>
             {tip.pick}{tip.odds?` @ ${tip.odds}`:""}
           </div>
         </div>
         <button onClick={()=>onRemove(tip.id)} title="Didn't bet this"
-          style={{background:"none",border:"1px solid #ffffff22",borderRadius:8,color:"#ffffff55",
-            fontFamily:"'DM Mono',monospace",fontSize:12,cursor:"pointer",padding:"2px 9px",flexShrink:0}}>✕</button>
+          style={{background:"none",border:"1px solid rgba(var(--ink-rgb),0.133)",borderRadius:8,color:"rgba(var(--ink-rgb),0.333)",
+            fontFamily:"'Inter',sans-serif",fontSize:12,cursor:"pointer",padding:"2px 9px",flexShrink:0}}>✕</button>
       </div>
       <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center"}}>
         <input type="number" inputMode="decimal" placeholder={`Stake (${tip.currency||"TSH"})`}
           value={stake} onChange={e=>setStake(e.target.value)}
-          style={{...S.input,flex:1,padding:"9px 11px",fontSize:12,border:"1px solid #ffffff22"}}/>
+          style={{...S.input,flex:1,padding:"9px 11px",fontSize:12,border:"1px solid rgba(var(--ink-rgb),0.133)"}}/>
         <button disabled={!valid} onClick={()=>onSettle(tip.id,"WIN",stake)}
           style={{padding:"9px 14px",borderRadius:9,border:"none",cursor:valid?"pointer":"not-allowed",
-            fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
-            background:valid?"linear-gradient(135deg,#69FF47,#00C853)":"#ffffff08",
-            color:valid?"#001a00":"#ffffff33",
-            boxShadow: auto==="WIN" ? "0 0 0 2px #69FF4799" : "none"}}>WIN</button>
+            fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
+            background:valid?"linear-gradient(135deg,#159A56,#159A56)":"rgba(var(--ink-rgb),0.031)",
+            color:valid?"#001a00":"rgba(var(--ink-rgb),0.2)",
+            boxShadow: auto==="WIN" ? "0 0 0 2px #159A5699" : "none"}}>WIN</button>
         <button disabled={!valid} onClick={()=>onSettle(tip.id,"LOSS",stake)}
           style={{padding:"9px 14px",borderRadius:9,border:"none",cursor:valid?"pointer":"not-allowed",
-            fontFamily:"'Orbitron',monospace",fontWeight:700,fontSize:11,
-            background:valid?"linear-gradient(135deg,#FF1744,#B71C1C)":"#ffffff08",
-            color:valid?"#fff":"#ffffff33",
-            boxShadow: auto==="LOSS" ? "0 0 0 2px #FF174499" : "none"}}>LOSS</button>
+            fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
+            background:valid?"linear-gradient(135deg,#DC3B3B,#B0302F)":"rgba(var(--ink-rgb),0.031)",
+            color:valid?"var(--ink)":"rgba(var(--ink-rgb),0.2)",
+            boxShadow: auto==="LOSS" ? "0 0 0 2px #DC3B3B99" : "none"}}>LOSS</button>
       </div>
       {auto && !valid && (
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8.5,color:"#ffffff66",marginTop:8}}>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,color:"rgba(var(--ink-rgb),0.4)",marginTop:8}}>
           Result is already in your accuracy. Add your stake to log the P&L too.
         </div>
       )}
       {valid && (
-        <div style={{fontFamily:"'DM Mono',monospace",fontSize:8.5,color:"#ffffff44",marginTop:8}}>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,color:"rgba(var(--ink-rgb),0.267)",marginTop:8}}>
           Win → +{fmt(s*(odds-1), tip.currency)} · Loss → −{fmt(s, tip.currency)}
         </div>
       )}
