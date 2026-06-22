@@ -585,6 +585,15 @@ export default function App() {
     showToast("✦ Data restored successfully!", "win");
   };
 
+  const go = (key) => {
+    if(key==="plans"){ setView("home"); return; }
+    if(key==="predict"){ setView("predict"); return; }
+    const id = allPlans[active] ? active : Object.keys(allPlans)[0];
+    if(!id){ setView("home"); return; }
+    if(id!==active) setAct(id);
+    setTab(key==="results"?"RESULTS":key==="archive"?"ARCHIVE":"TODAY");
+    setView("plan");
+  };
   const preset = PRESETS.find(p=>p.id===active) || PRESETS[0];
 
   return (
@@ -706,6 +715,8 @@ export default function App() {
           onTrack={trackTips} onSettle={settleTip} onRemove={removeTip}
           onArchive={archiveNow}/>
       )}
+
+      {(view==="home"||view==="predict"||view==="plan") && <BottomNav view={view} tab={tab} go={go}/>}
     </div>
   );
 }
@@ -739,17 +750,14 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
   return (
     <div style={{...S.screen, animation:"fadeUp 0.5s ease"}}>
       {/* Header */}
-      <div style={S.homeHeader}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",padding:"10px 2px 16px"}}>
         <div>
-          <div style={S.homeTitle}>ROLLOVER</div>
-          <div style={S.homeSub}>CLOUD-SYNCED TRACKER</div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:23,letterSpacing:"-0.02em",color:"var(--ink)"}}>Plans</div>
+          <div style={{fontSize:11,color:"var(--ink3)",fontWeight:500,marginTop:2,fontFamily:"'Inter',sans-serif"}}>{vals.length} active · cloud-synced</div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end",marginTop:18}}>
-          <div style={S.vBadge}>☁ CLOUD SAVE</div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={onShowCode} style={S.headerBtn} title="Your Save Code">🔑</button>
-            <button onClick={onRestore}  style={S.headerBtn} title="Restore Data">📲</button>
-          </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={onShowCode} style={S.headerBtn} title="Your Save Code">🔑</button>
+          <button onClick={onRestore}  style={S.headerBtn} title="Restore Data">📲</button>
         </div>
       </div>
 
@@ -836,69 +844,50 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
 
         return (
           <button key={p.id} onClick={()=>onOpen(p.id)}
-            style={{width:"100%",background:"none",border:"none",padding:0,
-              cursor:"pointer",marginBottom:12,textAlign:"left",
-              animation:`fadeUp ${0.5+i*0.1}s ease`}}>
-            <div style={{...S.planCard,
-              border:`1px solid ${exists?p.color+"44":"rgba(var(--ink-rgb),0.051)"}`,
-              boxShadow:exists?`0 0 30px ${p.glow.replace("0.5","0.07")}, inset 0 0 30px ${p.glow.replace("0.5","0.02")}`:"none"}}>
-              <div style={{position:"absolute",top:0,left:0,right:0,height:1,
-                background:exists?`linear-gradient(90deg,transparent,${p.color},transparent)`:"transparent"}}/>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <div style={{width:44,height:44,borderRadius:12,
-                    background:exists?p.gradient:"linear-gradient(135deg,rgba(var(--ink-rgb),0.024),rgba(var(--ink-rgb),0.008))",
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:20,fontFamily:"'Space Grotesk',sans-serif",
-                    color:exists?"#000":"rgba(var(--ink-rgb),0.133)",fontWeight:900,
-                    boxShadow:exists?`0 0 20px ${p.glow.replace("0.5","0.4")}`:"none"}}>
-                    {p.emoji}
-                  </div>
+            style={{display:"block",width:"100%",background:"var(--surface)",
+              border:"1px solid var(--hairline)",borderRadius:20,padding:18,marginBottom:13,
+              boxShadow:"var(--shadow)",cursor:"pointer",textAlign:"left",
+              animation:`fadeUp ${0.45+i*0.08}s ease`}}>
+            {exists ? (
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div>
-                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:16,
-                      color:exists?p.color:"rgba(var(--ink-rgb),0.133)",letterSpacing:2}}>
-                      PLAN {p.label}
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:19,letterSpacing:"-0.01em",color:"var(--ink)"}}>
+                      {p.label.charAt(0)+p.label.slice(1).toLowerCase()}
                     </div>
-                    <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginTop:3}}>
-                      {exists?`×${pl.odds} · ${pl.currency} · DAY ${st.day-1}`:`×${p.odds} · TAP TO ACTIVATE`}
+                    <div style={{fontSize:11,color:"var(--ink3)",marginTop:3,fontFamily:"'Inter',sans-serif"}}>
+                      Day {st.day-1} · ×{pl.odds} staking · {pl.currency}
                     </div>
+                  </div>
+                  <span style={{display:"inline-flex",alignItems:"center",fontSize:11,fontWeight:600,
+                    padding:"3px 9px",borderRadius:999,whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif",
+                    background:risk.color+"22",color:risk.color}}>
+                    {risk.short}
+                  </span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",
+                  borderTop:"1px solid var(--hairline)",paddingTop:13}}>
+                  <div>
+                    <div style={{fontSize:10,color:"var(--ink3)",fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'Inter',sans-serif"}}>Balance</div>
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:17,marginTop:3,color:"var(--ink)"}}>{fmt(tv,pl.currency)}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:10,color:"var(--ink3)",fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"'Inter',sans-serif"}}>Profit</div>
+                    <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:17,marginTop:3,
+                      color:parseFloat(roi)>=0?"var(--win)":"var(--loss)"}}>{(parseFloat(roi)>=0?"+":"")+roi+"%"}</div>
                   </div>
                 </div>
-                {exists ? (
-                  <div style={{padding:"4px 10px",borderRadius:20,fontFamily:"'Inter',sans-serif",
-                    fontWeight:700,fontSize:9,letterSpacing:1,
-                    background:`${risk.color}15`,color:risk.color,
-                    border:`1px solid ${risk.color}44`}}>
-                    {risk.short}
-                  </div>
-                ):(
-                  <div style={{padding:"4px 12px",borderRadius:20,fontFamily:"'Inter',sans-serif",
-                    fontSize:9,color:"rgba(var(--ink-rgb),0.133)",border:"1px solid rgba(var(--ink-rgb),0.067)"}}>
-                    + ADD
-                  </div>
-                )}
               </div>
-              {exists && (
-                <>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:14}}>
-                    {[["BANK",fmt(st.AB,pl.currency),p.color],
-                      ["RESERVE",fmt(st.SR,pl.currency),"#E08A00"],
-                      ["ROI",(parseFloat(roi)>=0?"+":"")+roi+"%",parseFloat(roi)>=0?"#159A56":"#DC3B3B"]
-                    ].map(([l,v,col],i)=>(
-                      <div key={i} style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:8,padding:"8px 10px",border:`1px solid ${col}15`}}>
-                        <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:2,marginBottom:4}}>{l}</div>
-                        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,color:col}}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{display:"flex",gap:16,marginTop:10,paddingTop:10,borderTop:"1px solid rgba(var(--ink-rgb),0.024)"}}>
-                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)"}}>🔥 {st.streak||0}</span>
-                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#159A5666"}}>✓ {(st.history||[]).filter(h=>h.result==="WIN").length}W</span>
-                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#DC3B3B66"}}>✕ {st.losses||0}L</span>
-                  </div>
-                </>
-              )}
-            </div>
+            ) : (
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:19,color:"var(--ink)"}}>{p.label.charAt(0)+p.label.slice(1).toLowerCase()}</div>
+                  <div style={{fontSize:11,color:"var(--ink3)",marginTop:3,fontFamily:"'Inter',sans-serif"}}>\u00d7{p.odds} odds \u00b7 tap to activate</div>
+                </div>
+                <span style={{display:"inline-flex",alignItems:"center",fontSize:11,fontWeight:600,padding:"3px 11px",
+                  borderRadius:999,background:"var(--cobalt-soft)",color:"var(--cobalt-ink)",fontFamily:"'Inter',sans-serif"}}>+ Activate</span>
+              </div>
+            )}
           </button>
         );
       })}
@@ -938,15 +927,15 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTr
           {risk.short}
         </div>
       </div>
-      <div style={{display:"flex",gap:4,marginBottom:14,background:"rgba(var(--ink-rgb),0.02)",borderRadius:12,padding:4}}>
+      <div style={{display:"flex",gap:2,marginBottom:16,background:"var(--seg-bg)",border:"1px solid var(--hairline)",borderRadius:13,padding:3,overflowX:"auto"}}>
         {TABS.map(t=>(
           <button key={t} onClick={()=>setTab(t)}
-            style={{flex:1,padding:"8px 2px",borderRadius:8,border:"none",cursor:"pointer",
-              fontFamily:"'Inter',sans-serif",fontSize:8,letterSpacing:0.5,transition:"all .25s",
-              background:tab===t?preset.gradient:"transparent",
-              color:tab===t?"#000000cc":preset.color+"55",
-              fontWeight:tab===t?"700":"400",
-              boxShadow:tab===t?`0 0 15px ${preset.glow}`:"none"}}>
+            style={{flex:"1 0 auto",padding:"8px 7px",borderRadius:10,border:"none",cursor:"pointer",
+              fontFamily:"'Inter',sans-serif",fontSize:9.5,letterSpacing:0.2,transition:"all .18s",whiteSpace:"nowrap",
+              background:tab===t?"var(--surface)":"transparent",
+              color:tab===t?"var(--cobalt-ink)":"var(--ink3)",
+              fontWeight:tab===t?"600":"500",
+              boxShadow:tab===t?"0 1px 3px rgba(20,20,35,.12)":"none"}}>
             {t}
           </button>
         ))}
@@ -2129,15 +2118,56 @@ function TipsTab({ plan, st, preset, onTrack }) {
 }
 
 /* ═══════════════════ GLOBAL CSS ════════════════════════════ */
+function BottomNav({view, tab, go}){
+  const items=[
+    {k:"plans",   label:"Plans",   on:view==="home",
+      d:(<><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></>)},
+    {k:"predict", label:"Predict", on:view==="predict",
+      d:(<><path d="M3 17l5-6 4 4 6-8"/><path d="M19 7v4h-4"/></>)},
+    {k:"results", label:"Results", on:view==="plan"&&tab==="RESULTS",
+      d:(<><path d="M4 6h11M4 12h11M4 18h7"/><path d="M19 7l2 2-2 2"/></>)},
+    {k:"archive", label:"Archive", on:view==="plan"&&tab==="ARCHIVE",
+      d:(<><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/></>)},
+    {k:"stake",   label:"Stake",   on:view==="plan"&&tab==="TODAY",
+      d:(<><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M8 15h2M14 11v4"/></>)},
+  ];
+  return (
+    <nav style={{position:"fixed",bottom:12,left:0,right:0,margin:"0 auto",width:"calc(100% - 24px)",maxWidth:406,
+      height:70,background:"var(--navbg)",backdropFilter:"saturate(160%) blur(14px)",WebkitBackdropFilter:"saturate(160%) blur(14px)",
+      border:"1px solid var(--hairline)",borderRadius:24,display:"flex",padding:"0 6px",
+      boxShadow:"0 6px 22px rgba(20,20,35,.12)",zIndex:100}}>
+      {items.map(it=>(
+        <button key={it.k} onClick={()=>go(it.k)}
+          style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",
+            alignItems:"center",justifyContent:"center",gap:4,paddingTop:3,
+            color:it.on?"var(--cobalt)":"var(--ink3)",fontFamily:"'Inter',sans-serif",fontSize:9.5,fontWeight:600,letterSpacing:0.2}}>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={it.on?"var(--cobalt)":"var(--ink3)"} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{it.d}</svg>
+          {it.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function GlobalCSS(){return(<style>{`
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
   :root{
-    --paper:#F4F4F1; --surface:#FFFFFF;
-    --ink-rgb:24,25,29; --ink:#18191D; --sheen-rgb:24,25,29;
+    --paper:#F4F4F1; --surface:#FFFFFF; --hairline:#E8E8E3;
+    --ink-rgb:24,25,29; --ink:#18191D; --ink2:#5C5D64; --ink3:#9B9CA3; --sheen-rgb:24,25,29;
+    --cobalt:#2F37D9; --cobalt-soft:#EDEEFB; --cobalt-ink:#2A31C2;
+    --amber:#E08A00; --amber-soft:#FBF1DE;
+    --win:#159A56; --win-soft:#E4F4EC; --loss:#DC3B3B; --loss-soft:#FBE9E9;
+    --field:#FBFBF9; --seg-bg:#EAEAE5; --track2:#F1F1EC;
+    --navbg:rgba(255,255,255,.86); --shadow:0 1px 2px rgba(20,20,35,.05),0 8px 26px rgba(20,20,35,.045);
   }
   :root[data-theme="dark"]{
-    --paper:#0F1014; --surface:#181A20;
-    --ink-rgb:241,242,239; --ink:#F1F2EF; --sheen-rgb:255,255,255;
+    --paper:#0F1014; --surface:#181A20; --hairline:#272A31;
+    --ink-rgb:241,242,239; --ink:#F1F2EF; --ink2:#A0A2AA; --ink3:#6E7079; --sheen-rgb:255,255,255;
+    --cobalt:#6B72F0; --cobalt-soft:#1E2140; --cobalt-ink:#9197FF;
+    --amber:#F2A52B; --amber-soft:#3A2C12;
+    --win:#34C77B; --win-soft:#102A1D; --loss:#FF5D5D; --loss-soft:#321818;
+    --field:#1E2127; --seg-bg:#23262D; --track2:#23262D;
+    --navbg:rgba(20,22,27,.9); --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 32px rgba(0,0,0,.5);
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--paper);color:var(--ink);-webkit-tap-highlight-color:transparent;overflow-x:hidden;transition:background-color .25s ease,color .25s ease;}
@@ -2156,7 +2186,7 @@ function GlobalCSS(){return(<style>{`
 /* ═══════════════════ STYLES ════════════════════════════════ */
 const S={
   root:{background:"var(--paper)",minHeight:"100vh",maxWidth:430,margin:"0 auto",position:"relative"},
-  screen:{padding:"0 16px 32px",paddingTop:16,position:"relative",zIndex:1},
+  screen:{padding:"0 16px 112px",paddingTop:16,position:"relative",zIndex:1},
   splash:{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",position:"relative",zIndex:1},
   splashLogo:{fontFamily:"'Space Grotesk',sans-serif",fontWeight:900,fontSize:40,color:"#2F37D9",
     letterSpacing:6,textShadow:"0 0 40px rgba(47,55,217,0.8),0 0 80px rgba(47,55,217,0.4)",
