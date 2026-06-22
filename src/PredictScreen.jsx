@@ -115,7 +115,7 @@ function computeScorecard(archive){
 }
 
 const st = {
-  wrap:{padding:"16px 16px 48px", position:"relative", zIndex:1},
+  wrap:{padding:"16px 16px 112px", position:"relative", zIndex:1},
   back:{background:"none",border:"none",color:"#2F37D999",fontFamily:mono,fontSize:11,
     cursor:"pointer",padding:"4px 0",letterSpacing:2},
   title:{fontFamily:orb, fontWeight:900, fontSize:18, color:"var(--ink)", letterSpacing:2, marginTop:10},
