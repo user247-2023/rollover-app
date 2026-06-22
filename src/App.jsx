@@ -269,7 +269,7 @@ const PRESETS = [
   {id:"beta", label:"BETA", color:"#159A56",glow:"rgba(105,255,71,0.5)",gradient:"linear-gradient(135deg,#159A56,#159A56)",odds:1.20,wdPct:0.25,emoji:"β"},
   {id:"gamma",label:"GAMMA",color:"#7C83F6",glow:"rgba(224,64,251,0.5)",gradient:"linear-gradient(135deg,#7C83F6,#AA00FF)",odds:1.50,wdPct:0.30,emoji:"γ"},
 ];
-const TABS = ["TODAY","TIPS","RESULTS","ARCHIVE","HISTORY","RESERVE","SETTINGS"];
+const TABS = ["TIPS","HISTORY","RESERVE","SETTINGS"];
 
 // ── Animated counter ─────────────────────────────────────────────
 function useCountUp(target, duration=700) {
@@ -761,14 +761,6 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
         </div>
       </div>
 
-      {/* Cloud save notice */}
-      <div style={{...S.noticeBar,marginBottom:14}}>
-        <span style={{fontSize:14}}>☁</span>
-        <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#2F37D988",letterSpacing:1}}>
-          Data saved to cloud. Tap 🔑 to get your Save Code for any device.
-        </span>
-      </div>
-
       {/* Combined value */}
       {vals.length>0 && (
         <div style={S.combinedCard}>
@@ -784,56 +776,6 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
           </div>
         </div>
       )}
-
-      {/* Combined Results Summary */}
-      {vals.length>0 && (() => {
-        const allTips = vals.flatMap(({state:st})=>st.tipResults||[]);
-        if(allTips.length===0) return null;
-        const totalProfit = allTips.reduce((s,r)=>s+r.profitTSH,0);
-        const totalStaked = allTips.reduce((s,r)=>s+r.stake,0);
-        const tipWins = allTips.filter(r=>r.result==="WIN").length;
-        const tipRoi = totalStaked>0?(totalProfit/totalStaked*100).toFixed(1):"0";
-        const profitCol = totalProfit>=0?"#159A56":"#DC3B3B";
-        return (
-          <div style={{...S.glassCard,border:"1px solid #E08A0033",
-            background:"linear-gradient(135deg,#E08A0008,transparent)",marginBottom:14}}>
-            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"#E08A0088",
-              letterSpacing:3,marginBottom:10}}>TIPS RESULTS SUMMARY</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-              {[
-                ["BETS",allTips.length,"#2F37D9"],
-                ["WINS",tipWins,"#159A56"],
-                ["ROI",(parseFloat(tipRoi)>=0?"+":"")+tipRoi+"%",profitCol],
-                ["P&L",`${totalProfit>=0?"+":""}$${Math.abs(totalProfit/TSH_TO_USD).toFixed(0)}`,profitCol],
-              ].map(([l,v,col])=>(
-                <div key={l} style={{textAlign:"center"}}>
-                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:7,color:"rgba(var(--ink-rgb),0.2)",letterSpacing:1}}>{l}</div>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:col,marginTop:3}}>{v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      <button onClick={onPredict} style={{width:"100%",background:"none",border:"none",padding:0,
-        cursor:"pointer",marginBottom:14,textAlign:"left",animation:"fadeUp 0.45s ease"}}>
-        <div style={{background:"linear-gradient(135deg,#2F37D914,transparent)",border:"1px solid #2F37D933",
-          borderRadius:16,padding:16,display:"flex",alignItems:"center",justifyContent:"space-between",
-          boxShadow:"0 0 30px rgba(47,55,217,0.06)"}}>
-          <div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:"#2F37D9",letterSpacing:1}}>⚽ MATCH PREDICTIONS</div>
-            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.333)",letterSpacing:1,marginTop:4}}>
-              Win %, goals &amp; value · 18 leagues + World Cup
-            </div>
-          </div>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:20,color:"#2F37D9"}}>→</div>
-        </div>
-      </button>
-
-      <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:14,paddingLeft:2}}>
-        SELECT PLAN
-      </div>
 
       {PRESETS.map((p,i) => {
         const exists = !!allPlans[p.id];
@@ -908,27 +850,23 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTr
   const nextWD = 7 - ((st.day-1) % 7);
   return (
     <div style={{...S.screen,animation:"fadeUp 0.3s ease"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-        padding:"14px 0",borderBottom:`1px solid ${preset.color}22`,marginBottom:14}}>
-        <button onClick={onBack} style={S.backBtn}>← PLANS</button>
-        <div style={{textAlign:"center"}}>
-          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:18,
-            color:preset.color,letterSpacing:3,textShadow:`0 0 20px ${preset.glow}`}}>
-            {preset.emoji} {preset.label}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"6px 2px 16px"}}>
+        <div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:23,letterSpacing:"-0.02em",color:"var(--ink)"}}>
+            {preset.label.charAt(0)+preset.label.slice(1).toLowerCase()}
           </div>
-          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.2)",marginTop:2}}>
-            DAY {st.day-1} · ×{plan.odds} · {plan.currency}
+          <div style={{fontSize:11,color:"var(--ink3)",fontWeight:500,marginTop:2,fontFamily:"'Inter',sans-serif"}}>
+            Day {st.day-1} · ×{plan.odds} · {plan.currency}
           </div>
         </div>
-        <div style={{padding:"5px 10px",borderRadius:20,fontFamily:"'Inter',sans-serif",
-          fontWeight:700,fontSize:9,letterSpacing:1,
-          background:`${risk.color}15`,color:risk.color,
-          border:`1px solid ${risk.color}44`,boxShadow:`0 0 12px ${risk.color}33`}}>
+        <span style={{display:"inline-flex",alignItems:"center",fontSize:11,fontWeight:600,padding:"4px 11px",
+          borderRadius:999,whiteSpace:"nowrap",fontFamily:"'Inter',sans-serif",marginTop:4,
+          background:risk.color+"22",color:risk.color}}>
           {risk.short}
-        </div>
+        </span>
       </div>
       <div style={{display:"flex",gap:2,marginBottom:16,background:"var(--seg-bg)",border:"1px solid var(--hairline)",borderRadius:13,padding:3,overflowX:"auto"}}>
-        {TABS.map(t=>(
+        {["TIPS","HISTORY","RESERVE","SETTINGS"].map(t=>(
           <button key={t} onClick={()=>setTab(t)}
             style={{flex:"1 0 auto",padding:"8px 7px",borderRadius:10,border:"none",cursor:"pointer",
               fontFamily:"'Inter',sans-serif",fontSize:9.5,letterSpacing:0.2,transition:"all .18s",whiteSpace:"nowrap",
