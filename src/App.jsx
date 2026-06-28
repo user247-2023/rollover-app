@@ -568,6 +568,14 @@ export default function App() {
     setView("home");
   };
 
+  // Edit a plan's editable fields (name, target total odds) and persist everywhere
+  const updatePlan = async (id, patch) => {
+    if(!allPlans[id]) return;
+    const cur = allPlans[id];
+    await persist({...allPlans, [id]:{plan:{...cur.plan, ...patch}, state:cur.state}});
+    showToast("✦ Plan updated", "win");
+  };
+
   // ── Restore via Save Code ────────────────────────────────────────
   const handleRestore = async () => {
     const code = restoreInput.trim().toUpperCase();
@@ -713,7 +721,8 @@ export default function App() {
           onBet={logBet} onBack={()=>setView("home")} onDelete={()=>deletePlan(active)}
           onLogTip={logTipResult}
           onTrack={trackTips} onSettle={settleTip} onRemove={removeTip}
-          onArchive={archiveNow}/>
+          onArchive={archiveNow}
+          onUpdate={(patch)=>updatePlan(active,patch)}/>
       )}
 
       {(view==="home"||view==="predict"||view==="plan") && <BottomNav view={view} tab={tab} go={go}/>}
@@ -844,7 +853,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
 }
 
 /* ═══════════════════ PLAN VIEW ═════════════════════════════ */
-function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTrack,onSettle,onRemove,onArchive}) {
+function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTrack,onSettle,onRemove,onArchive,onUpdate}) {
   const risk   = riskInfo(st.streak||0, st.AB, st.SR);
   const wdCalc = calcWD(st.AB, st.day, st.lastWD, st.crossed, plan.wdPct);
   const nextWD = 7 - ((st.day-1) % 7);
@@ -853,7 +862,7 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTr
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"6px 2px 16px"}}>
         <div>
           <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:23,letterSpacing:"-0.02em",color:"var(--ink)"}}>
-            {preset.label.charAt(0)+preset.label.slice(1).toLowerCase()}
+            {plan.name || (preset.label.charAt(0)+preset.label.slice(1).toLowerCase())}
           </div>
           <div style={{fontSize:11,color:"var(--ink3)",fontWeight:500,marginTop:2,fontFamily:"'Inter',sans-serif"}}>
             Day {st.day-1} · ×{plan.odds} · {plan.currency}
@@ -885,7 +894,7 @@ function PlanView({plan,st,preset,tab,setTab,onBet,onBack,onDelete,onLogTip,onTr
         {tab==="ARCHIVE"   && <ArchiveTab   plan={plan} st={st} preset={preset}/>}
         {tab==="HISTORY"   && <HistTab     plan={plan} st={st} preset={preset}/>}
         {tab==="RESERVE"   && <SRTab       plan={plan} st={st} preset={preset}/>}
-        {tab==="SETTINGS"  && <SetTab      plan={plan} preset={preset} onDelete={onDelete}/>}
+        {tab==="SETTINGS"  && <SetTab      plan={plan} preset={preset} onDelete={onDelete} onUpdate={onUpdate}/>}
       </div>
     </div>
   );
@@ -1448,13 +1457,54 @@ function SRTab({plan,st,preset}) {
 }
 
 /* ═══════════════════ SETTINGS ══════════════════════════════ */
-function SetTab({plan,preset,onDelete}) {
+function SetTab({plan,preset,onDelete,onUpdate}) {
   const [confirm,setConfirm]=useState(false);
+  const [editing,setEditing]=useState(false);
+  const [name,setName]=useState(plan.name||"");
+  const [odds,setOdds]=useState(String(plan.odds));
+  const saveEdit=()=>{
+    const o=parseFloat(odds);
+    if(!o||o<1.01||o>1000){ alert("Enter a target total odds of at least 1.01"); return; }
+    onUpdate && onUpdate({name:(name.trim()||`Plan ${preset.label}`), odds:Math.round(o*100)/100});
+    setEditing(false);
+  };
   return(
     <div>
+      {/* Editable: plan name + target total (rollover) odds */}
+      <div style={{...S.glassCard,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editing?14:0}}>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3}}>EDIT PLAN</div>
+          {!editing && (
+            <button onClick={()=>{setName(plan.name||"");setOdds(String(plan.odds));setEditing(true);}}
+              style={{background:`${preset.color}14`,border:`1px solid ${preset.color}44`,borderRadius:8,
+                color:preset.color,fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:10,padding:"6px 12px",cursor:"pointer",letterSpacing:1}}>
+              ✎ EDIT
+            </button>
+          )}
+        </div>
+        {editing && (
+          <div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.3)",letterSpacing:2,marginBottom:6}}>PLAN NAME</div>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder={`Plan ${preset.label}`}
+              style={{...S.input,marginBottom:14,border:`1px solid ${preset.color}44`}}/>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.3)",letterSpacing:2,marginBottom:6}}>TARGET TOTAL ODDS (rollover slip)</div>
+            <input type="number" inputMode="decimal" step="0.05" min="1.01" value={odds} onChange={e=>setOdds(e.target.value)} placeholder="e.g. 2.0"
+              style={{...S.input,border:`1px solid ${preset.color}44`}}/>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,color:"rgba(var(--ink-rgb),0.28)",lineHeight:1.5,marginTop:6}}>
+              Each day, combine tips until the slip's combined odds reach about this number. A winning slip grows your balance ×{odds||plan.odds}.
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button onClick={()=>setEditing(false)}
+                style={{...S.winBtn,flex:1,background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.133)",color:"rgba(var(--ink-rgb),0.4)",boxShadow:"none"}}>CANCEL</button>
+              <button onClick={saveEdit}
+                style={{...S.winBtn,flex:2,background:preset.gradient,color:"#000",boxShadow:`0 4px 20px ${preset.glow}`}}>SAVE CHANGES</button>
+            </div>
+          </div>
+        )}
+      </div>
       <div style={S.glassCard}>
         <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:12}}>PLAN CONFIG</div>
-        {[["Plan",`${preset.emoji} ${preset.label}`],["Odds","× "+plan.odds],
+        {[["Plan",`${preset.emoji} ${plan.name||preset.label}`],["Odds","× "+plan.odds],
           ["Currency",plan.currency],["Starting",fmt(plan.starting,plan.currency)],
           ["Weekly WD",(plan.wdPct*100).toFixed(0)+"% of AB"],
           ["Milestone WD","35% at milestones"],["Loss Restart","60% of SR → AB"],["SR Protection","40% always kept"]
@@ -1774,6 +1824,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
         const rCol = riskColor(tip.risk);
         const isExp= expanded===tip.id;
         const conf = tip.confidence || 70;
+        const neg  = typeof tip.value === "number" && tip.value < 0;
 
         return (
           <button key={tip.id||i} onClick={()=>setExpanded(isExp?null:tip.id)}
@@ -1781,8 +1832,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
               cursor:"pointer",marginBottom:10,textAlign:"left",
               animation:`fadeUp ${0.2+i*0.05}s ease`}}>
             <div style={{...S.glassCard,marginBottom:0,padding:"14px",
-              border:`1px solid ${col}22`,
-              background:`linear-gradient(135deg,${col}06,var(--surface))`,
+              border:`1px solid ${neg?"rgba(var(--ink-rgb),0.12)":col+"22"}`,
+              background:neg?"rgba(var(--ink-rgb),0.02)":`linear-gradient(135deg,${col}06,var(--surface))`,
+              opacity:neg?0.5:1, filter:neg?"grayscale(0.9)":"none",
               transition:"all .25s"}}>
 
               {/* Top accent */}
@@ -1875,6 +1927,18 @@ function TipsTab({ plan, st, preset, onTrack }) {
                     color:"#E08A00", letterSpacing:1, fontWeight:700,
                   }}>
                     ⚡ {tip.edge_pct} EDGE
+                  </div>
+                )}
+
+                {/* Negative edge - greyed, flagged as not value */}
+                {neg && (
+                  <div style={{
+                    background:"rgba(var(--ink-rgb),0.04)", border:"1px solid rgba(var(--ink-rgb),0.15)",
+                    borderRadius:20, padding:"4px 10px",
+                    fontFamily:"'Inter',sans-serif", fontSize:8,
+                    color:"rgba(var(--ink-rgb),0.4)", letterSpacing:1, fontWeight:700,
+                  }}>
+                    ✕ {tip.edge_pct} · NO VALUE
                   </div>
                 )}
               </div>
