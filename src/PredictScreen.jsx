@@ -448,10 +448,11 @@ function Divergence({ model, market, pick }){
   const key = pick==="2" ? "away" : pick==="X" ? "draw" : "home";
   const mod = model[key], mkt = market[key];
   const edge = mod - mkt;
-  const eCol = Math.abs(edge) < 0.03 ? C.soft : edge > 0 ? C.green : C.red;
+  const neg  = edge < -0.005;
+  const eCol = neg ? C.mute : Math.abs(edge) < 0.03 ? C.soft : C.green;
   const sideName = key==="home"?"Home":key==="away"?"Away":"Draw";
   return (
-    <div style={{display:"flex", alignItems:"center", gap:12, marginTop:11, fontFamily:mono, fontSize:10, color:C.soft}}>
+    <div style={{display:"flex", alignItems:"center", gap:12, marginTop:11, fontFamily:mono, fontSize:10, color:C.soft, opacity:neg?0.5:1}}>
       <span style={{letterSpacing:1, fontSize:8, color:C.mute}}>{sideName.toUpperCase()}</span>
       <span>Model <b style={{color:"var(--ink)"}}>{pc(mod)}</b></span>
       <span>Market <b style={{color:"var(--ink)"}}>{pc(mkt)}</b></span>
@@ -732,9 +733,11 @@ function ManualTab(){
 /* shared value-bet row + manual value list */
 function BetRow({ b }){
   const isVal = b.is_value;
+  const neg = (typeof b.edge==="number") && b.edge < 0;
   const tierCol = b.risk_tier==="low" ? C.green : b.risk_tier==="medium" ? C.yellow : C.red;
   return (
     <div style={{border:`1px solid ${isVal?C.green+"66":"rgba(var(--ink-rgb),0.063)"}`, borderRadius:12, padding:12, marginTop:10,
+      opacity:neg?0.5:1, filter:neg?"grayscale(0.9)":"none",
       background:isVal ? "linear-gradient(180deg,#159A5610,transparent)" : "rgba(var(--ink-rgb),0.016)"}}>
       <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexWrap:"wrap"}}>
         <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:"var(--ink)"}}>{b.label}</div>
