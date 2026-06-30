@@ -710,9 +710,11 @@ export default function App() {
         <HomeScreen allPlans={allPlans} onOpen={openPlan}
           onShowCode={()=>setShowCode(true)}
           onRestore={()=>setRM(true)}
-          onPredict={()=>setView("predict")}/>
+          onPredict={()=>setView("predict")}
+          onCalibration={()=>setView("calibration")}/>
       )}
       {view==="predict" && <PredictScreen onBack={()=>setView("home")}/>}
+      {view==="calibration" && <CalibrationView onBack={()=>setView("home")}/>}
       {view==="setup"   && <SetupScreen presetId={setupId} onSetup={handleSetup} onBack={()=>setView("home")}/>}
       {view==="plan" && allPlans[active] && (
         <PlanView
@@ -748,7 +750,7 @@ function SplashScreen() {
 }
 
 /* ═══════════════════ HOME ══════════════════════════════════ */
-function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
+function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict, onCalibration}) {
   const vals  = Object.values(allPlans);
   const total = vals.reduce((s,{state:st})=>s+st.AB+st.SR, 0);
   const cur   = vals[0]?.plan?.currency || "TSH";
@@ -765,6 +767,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
           <div style={{fontSize:11,color:"var(--ink3)",fontWeight:500,marginTop:2,fontFamily:"'Inter',sans-serif"}}>{vals.length} active · cloud-synced</div>
         </div>
         <div style={{display:"flex",gap:6}}>
+          <button onClick={onCalibration} style={S.headerBtn} title="Model Accuracy">📊</button>
           <button onClick={onShowCode} style={S.headerBtn} title="Your Save Code">🔑</button>
           <button onClick={onRestore}  style={S.headerBtn} title="Restore Data">📲</button>
         </div>
@@ -833,7 +836,7 @@ function HomeScreen({allPlans, onOpen, onShowCode, onRestore, onPredict}) {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:19,color:"var(--ink)"}}>{p.label.charAt(0)+p.label.slice(1).toLowerCase()}</div>
-                  <div style={{fontSize:11,color:"var(--ink3)",marginTop:3,fontFamily:"'Inter',sans-serif"}}>\u00d7{p.odds} odds \u00b7 tap to activate</div>
+                  <div style={{fontSize:11,color:"var(--ink3)",marginTop:3,fontFamily:"'Inter',sans-serif"}}>×{p.odds} odds · tap to activate</div>
                 </div>
                 <span style={{display:"inline-flex",alignItems:"center",fontSize:11,fontWeight:600,padding:"3px 11px",
                   borderRadius:999,background:"var(--cobalt-soft)",color:"var(--cobalt-ink)",fontFamily:"'Inter',sans-serif"}}>+ Activate</span>
@@ -1541,18 +1544,106 @@ function SetTab({plan,preset,onDelete,onUpdate}) {
 }
 
 /* ═══════════════════ SETUP ═════════════════════════════════ */
+/* MODEL ACCURACY (CALIBRATION) */
+function CalibrationView({onBack}) {
+  const API = "https://web-production-6371a.up.railway.app";
+  const [data,setData]       = useState(null);
+  const [err,setErr]         = useState("");
+  const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    let live=true;
+    fetch(`${API}/api/calibration`)
+      .then(r=>r.json())
+      .then(d=>{ if(live){ setData(d); setLoading(false); } })
+      .catch(()=>{ if(live){ setErr("Could not load accuracy data. Is the backend awake?"); setLoading(false); } });
+    return ()=>{ live=false; };
+  },[]);
+
+  const bands   = data?.by_band || [];
+  const ov      = data?.overall;
+  const settled = data?.settled || 0;
+
+  return (
+    <div style={{...S.screen,animation:"fadeUp .4s ease"}}>
+      <button onClick={onBack} style={{...S.backBtn,alignSelf:"flex-start",marginBottom:20}}>← BACK</button>
+      <div style={{marginBottom:18}}>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:23,color:"var(--ink)",letterSpacing:"-0.02em"}}>Model Accuracy</div>
+        <div style={{fontSize:11,color:"var(--ink3)",marginTop:2,fontFamily:"'Inter',sans-serif"}}>Predicted % vs what actually happened.</div>
+      </div>
+
+      {loading && <div style={{textAlign:"center",padding:40,color:"var(--ink3)",fontFamily:"'Inter',sans-serif",fontSize:12}}>Loading…</div>}
+      {err && !loading && <div style={{...S.glassCard,textAlign:"center",color:"#DC3B3B",fontFamily:"'Inter',sans-serif",fontSize:12}}>{err}</div>}
+
+      {!loading && !err && settled===0 && (
+        <div style={{...S.glassCard,textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:10,opacity:.3}}>📊</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:12,color:"var(--ink3)",lineHeight:1.6}}>
+            No settled predictions yet.<br/>Generate tips, wait for those matches to finish, then refresh the database. Accuracy shows up here.
+          </div>
+        </div>
+      )}
+
+      {!loading && !err && settled>0 && ov && (
+        <>
+          <div style={{display:"flex",gap:8,marginBottom:12}}>
+            {[
+              ["PREDICTED", ov.avg_predicted+"%", "#2F37D9"],
+              ["ACTUAL",    ov.actual_hit+"%",    "#159A56"],
+              ["BRIER",     ov.brier_score,       ov.brier_score<0.25?"#159A56":"#E08A00"],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{flex:1,background:`${c}0d`,border:`1px solid ${c}33`,borderRadius:12,padding:"12px 8px",textAlign:"center"}}>
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:c+"99",letterSpacing:1,marginBottom:4}}>{l}</div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:18,color:c}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,color:"var(--ink3)",marginBottom:18,textAlign:"center"}}>
+            From {settled} settled prediction{settled!==1?"s":""}. Closer PREDICTED ↔ ACTUAL = more honest.
+          </div>
+
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.3)",letterSpacing:2,marginBottom:10}}>RELIABILITY BY CONFIDENCE BAND</div>
+          {bands.map((b,i)=>{
+            const c = Math.abs(b.gap)<=5 ? "#159A56" : Math.abs(b.gap)<=10 ? "#E08A00" : "#DC3B3B";
+            return (
+              <div key={i} style={{...S.glassCard,marginBottom:8,padding:"12px 14px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:"var(--ink)"}}>{b.band}</span>
+                  <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"var(--ink3)"}}>{b.tips} tip{b.tips!==1?"s":""}</span>
+                </div>
+                {[["Predicted",b.predicted,"#2F37D9"],["Actual",b.actual_hit,c]].map(([lab,val,col])=>(
+                  <div key={lab} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <span style={{width:54,fontFamily:"'Inter',sans-serif",fontSize:8,color:"var(--ink3)"}}>{lab}</span>
+                    <div style={{flex:1,height:6,background:"rgba(var(--ink-rgb),0.05)",borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${Math.min(val,100)}%`,background:col,borderRadius:3,transition:"width .6s ease"}}/>
+                    </div>
+                    <span style={{width:38,textAlign:"right",fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,color:col}}>{val}%</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          {data?.guide && (
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"var(--ink3)",lineHeight:1.6,marginTop:12,padding:"0 4px"}}>{data.guide}</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function SetupScreen({presetId,onSetup,onBack}) {
   const preset = PRESETS.find(p=>p.id===presetId);
   const fields = [
-    {k:"name",     label:"PLAN NAME",        ph:`My ${preset.label} Plan`, type:"text"},
-    {k:"starting", label:"STARTING CAPITAL", ph:"e.g. 50000",              type:"number"},
-    {k:"currency", label:"CURRENCY",         ph:"e.g. TSH",                type:"text"},
+    {k:"name",     label:"PLAN NAME",         ph:`My ${preset.label} Plan`, type:"text"},
+    {k:"odds",     label:"TARGET TOTAL ODDS", ph:"e.g. 2.0",                type:"number"},
+    {k:"starting", label:"STARTING CAPITAL",  ph:"e.g. 50000",             type:"number"},
+    {k:"currency", label:"CURRENCY",          ph:"e.g. TSH",               type:"text"},
   ];
   const [step,setStep] = useState(0);
-  const [form,setForm] = useState({name:`Plan ${preset.label}`,starting:"50000",currency:"TSH"});
+  const [form,setForm] = useState({name:`Plan ${preset.label}`,odds:String(preset.odds),starting:"50000",currency:"TSH"});
   const next = () => {
     if(step<fields.length-1) setStep(s=>s+1);
-    else onSetup(presetId, {...form, odds:preset.odds, starting:parseFloat(form.starting), wdPct:preset.wdPct});
+    else onSetup(presetId, {...form, odds:(parseFloat(form.odds)>=1.01?Math.round(parseFloat(form.odds)*100)/100:preset.odds), starting:parseFloat(form.starting), wdPct:preset.wdPct});
   };
   return(
     <div style={{...S.screen,display:"flex",flexDirection:"column",justifyContent:"center",minHeight:"100vh",animation:"fadeUp .5s ease"}}>
