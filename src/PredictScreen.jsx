@@ -245,10 +245,114 @@ export default function PredictScreen({ onBack }){
         })}
       </div>
 
+      <CalibrationCard/>
+
       {mode==="upcoming" && <UpcomingTab onLog={logPredictions}/>}
       {mode==="best"     && <BestTipsTab/>}
       {mode==="track"    && <TrackRecordTab archive={predArchive} onSettle={settlePredictions}/>}
       {mode==="manual"   && <ManualTab/>}
+    </div>
+  );
+}
+
+/* ═══════════════════ MODEL ACCURACY (calibration) ═══════════════ */
+function CalibrationCard(){
+  const [rep, setRep] = useState(null);
+  const [err, setErr] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(()=>{
+    let live = true;
+    fetch(`${API}/api/calibration`)
+      .then(r=>r.json())
+      .then(d=>{ if(live) setRep(d); })
+      .catch(()=>{ if(live) setErr("Could not load accuracy."); });
+    return ()=>{ live=false; };
+  },[]);
+
+  if(err) return null;
+  if(!rep) return null;
+
+  const settled = rep.settled||0;
+  const ov = rep.overall;
+
+  // not enough data yet — show a gentle placeholder
+  if(!settled || !ov){
+    return (
+      <div style={{border:`1px solid ${C.line}`, borderRadius:14, padding:"13px 15px", marginBottom:16,
+        background:"rgba(var(--ink-rgb),0.016)"}}>
+        <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"var(--ink)", letterSpacing:1}}>MODEL ACCURACY</div>
+        <div style={{fontFamily:mono, fontSize:10, color:C.soft, marginTop:6, lineHeight:1.5}}>
+          Building a track record. Once tips are settled (matches finish + DB refreshed), this shows whether predictions actually hit their rates.
+        </div>
+      </div>
+    );
+  }
+
+  const hit = ov.actual_hit, pred = ov.avg_predicted;
+  const wellCal = Math.abs(hit-pred) <= 5;
+  const headCol = wellCal ? C.green : C.yellow;
+
+  return (
+    <div style={{border:`1px solid ${headCol}44`, borderRadius:14, padding:"13px 15px", marginBottom:16,
+      background:`linear-gradient(180deg,${headCol}0d,transparent)`}}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{width:"100%", background:"none", border:"none", padding:0, cursor:"pointer", textAlign:"left"}}>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+          <div>
+            <div style={{fontFamily:orb, fontWeight:700, fontSize:11, color:"var(--ink)", letterSpacing:1}}>MODEL ACCURACY</div>
+            <div style={{fontFamily:mono, fontSize:9.5, color:C.soft, marginTop:3}}>
+              {settled} settled · says {pred}% → hits {hit}%
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontFamily:orb, fontWeight:900, fontSize:16, color:headCol}}>{hit}%</div>
+            <div style={{fontFamily:mono, fontSize:8, color:C.mute, letterSpacing:1}}>{open?"▲ HIDE":"▼ DETAIL"}</div>
+          </div>
+        </div>
+      </button>
+
+      {open && (
+        <div style={{marginTop:12, paddingTop:12, borderTop:`1px solid ${C.line}`}}>
+          {/* overall metrics */}
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12}}>
+            {[
+              ["PREDICTED", pred+"%", C.cyan],
+              ["ACTUAL", hit+"%", C.green],
+              ["BRIER", ov.brier_score, ov.brier_score<0.25?C.green:C.yellow],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{background:"rgba(var(--ink-rgb),0.024)", borderRadius:8, padding:"8px", textAlign:"center"}}>
+                <div style={{fontFamily:mono, fontSize:7.5, color:C.mute, letterSpacing:1.5}}>{l}</div>
+                <div style={{fontFamily:orb, fontWeight:700, fontSize:13, color:c, marginTop:3}}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* per-band reliability bars: predicted vs actual */}
+          <div style={{fontFamily:mono, fontSize:8, color:C.mute, letterSpacing:2, marginBottom:8}}>
+            WHEN MODEL SAYS… IT ACTUALLY HITS…
+          </div>
+          {(rep.by_band||[]).map((b)=>(
+            <div key={b.band} style={{marginBottom:9}}>
+              <div style={{display:"flex", justifyContent:"space-between", fontFamily:mono, fontSize:9, color:C.dim, marginBottom:3}}>
+                <span>{b.band} <span style={{color:C.mute}}>({b.tips})</span></span>
+                <span style={{color: Math.abs(b.gap)<=6?C.green:C.yellow}}>
+                  hits {b.actual_hit}% <span style={{color:C.mute}}>({b.gap>0?"+":""}{b.gap})</span>
+                </span>
+              </div>
+              <div style={{position:"relative", height:6, background:"rgba(var(--ink-rgb),0.05)", borderRadius:3, overflow:"hidden"}}>
+                <div style={{position:"absolute", left:0, top:0, bottom:0, width:`${b.actual_hit}%`,
+                  background:`linear-gradient(90deg,${C.green}99,${C.green})`, borderRadius:3}}/>
+                <div style={{position:"absolute", top:-1, bottom:-1, left:`${b.predicted}%`, width:2,
+                  background:C.cyan}} title="predicted"/>
+              </div>
+            </div>
+          ))}
+          <div style={{fontFamily:mono, fontSize:8, color:C.mute, marginTop:8, lineHeight:1.5}}>
+            Green bar = real hit-rate · blue line = what the model predicted. Closer together = more honest. {rep.guide}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
