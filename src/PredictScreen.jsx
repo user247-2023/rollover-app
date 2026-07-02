@@ -23,6 +23,73 @@ const pc  = (x)=> Math.round((x||0)*100)+"%";
 const pc1 = (x)=> ((x||0)*100).toFixed(1)+"%";
 const dec = (x)=> (x==null? "—" : Number(x).toFixed(2));
 
+/* Competition theming — mirrors App.jsx (kept local to avoid cross-file import risk) */
+const COMP_THEMES = [
+  // International (nation) tournaments
+  { match:["world cup qualif","wc qualif","qualifier"], color:"#5A6270", emoji:"\u26bd", label:"WC Qualifiers" },
+  { match:["club world cup","fifa club"],   color:"#C9A227", emoji:"\ud83c\udfc6", label:"Club World Cup" },
+  { match:["world cup","fifa"],             color:"#C9A227", emoji:"\ud83c\udfc6", label:"World Cup" },
+  { match:["euro ","european championship","uefa euro"], color:"#1F6FEB", emoji:"\ud83c\udfc6", label:"Euros" },
+  { match:["nations league"],               color:"#2E4A8B", emoji:"\ud83c\udfc6", label:"Nations League" },
+  { match:["copa america","copa am\u00e9rica"], color:"#159A56", emoji:"\ud83c\udfc6", label:"Copa America" },
+  { match:["afcon","africa cup","cup of nations"], color:"#159A56", emoji:"\ud83c\udfc6", label:"AFCON" },
+  { match:["asian cup","afc asian"],        color:"#E8730C", emoji:"\ud83c\udfc6", label:"Asian Cup" },
+  { match:["gold cup","concacaf champ"],    color:"#C9A227", emoji:"\ud83c\udfc6", label:"Gold Cup" },
+  { match:["olympic"],                      color:"#C9A227", emoji:"\ud83e\udd47", label:"Olympics" },
+  { match:["friendly","friendlies"],        color:"#5A6270", emoji:"\ud83e\udd1d", label:"Friendly" },
+  // Continental club competitions
+  { match:["champions league","ucl"],       color:"#1F6FEB", emoji:"\u2b50", label:"UCL" },
+  { match:["europa league","uel"],          color:"#E8730C", emoji:"\ud83c\udfc6", label:"Europa" },
+  { match:["conference league","uecl"],     color:"#159A56", emoji:"\ud83c\udfc6", label:"Conference" },
+  { match:["libertadores"],                 color:"#159A56", emoji:"\ud83c\udfc6", label:"Libertadores" },
+  { match:["sudamericana"],                 color:"#E8730C", emoji:"\ud83c\udfc6", label:"Sudamericana" },
+  { match:["caf champions"],                color:"#159A56", emoji:"\ud83c\udfc6", label:"CAF CL" },
+  { match:["afc champions"],                color:"#E8730C", emoji:"\ud83c\udfc6", label:"AFC CL" },
+  { match:["super cup","supercup"],         color:"#C9A227", emoji:"\ud83c\udfc6", label:"Super Cup" },
+  // Country-specific leagues containing generic words (match BEFORE generic)
+  { match:["egyptian premier","egypt premier"], color:"#C0392B", emoji:"\ud83c\uddea\ud83c\uddec", label:"Egypt PL" },
+  { match:["russian premier"],              color:"#C0392B", emoji:"\ud83c\uddf7\ud83c\uddfa", label:"Russia PL" },
+  { match:["ukrainian premier"],            color:"#2E4A8B", emoji:"\ud83c\uddfa\ud83c\udde6", label:"Ukraine PL" },
+  { match:["scottish prem","scotland prem"],color:"#2E4A8B", emoji:"\ud83c\udff4", label:"Scotland" },
+  { match:["tanzania","ligi kuu","nbc premier"], color:"#159A56", emoji:"\ud83c\uddf9\ud83c\uddff", label:"Tanzania" },
+  { match:["indian super","isl "],          color:"#E8730C", emoji:"\ud83c\uddee\ud83c\uddf3", label:"India ISL" },
+  { match:["australian","a-league","a league"], color:"#C9A227", emoji:"\ud83c\udde6\ud83c\uddfa", label:"A-League" },
+  { match:["chinese super"],                color:"#C0392B", emoji:"\ud83c\udde8\ud83c\uddf3", label:"China CSL" },
+  // Top European leagues
+  { match:["premier league","epl"],         color:"#7A3FF2", emoji:"\ud83e\udd81", label:"Premier League" },
+  { match:["championship"],                 color:"#5B37B0", emoji:"\ud83e\udd81", label:"Championship" },
+  { match:["la liga","laliga","primera divi"], color:"#E23A45", emoji:"\ud83c\uddea\ud83c\uddf8", label:"La Liga" },
+  { match:["brasileir","serie a bra","brazil"], color:"#C9A227", emoji:"\ud83c\udde7\ud83c\uddf7", label:"Brazil" },
+  { match:["serie a"],                      color:"#159A56", emoji:"\ud83c\uddee\ud83c\uddf9", label:"Serie A" },
+  { match:["bundesliga"],                   color:"#D61F26", emoji:"\ud83c\udde9\ud83c\uddea", label:"Bundesliga" },
+  { match:["ligue 1"],                      color:"#1B2A6B", emoji:"\ud83c\uddeb\ud83c\uddf7", label:"Ligue 1" },
+  { match:["eredivisie"],                   color:"#E8730C", emoji:"\ud83c\uddf3\ud83c\uddf1", label:"Eredivisie" },
+  { match:["primeira","liga portugal"],     color:"#159A56", emoji:"\ud83c\uddf5\ud83c\uddf9", label:"Primeira" },
+  { match:["s\u00fcper lig","super lig"],   color:"#C0392B", emoji:"\ud83c\uddf9\ud83c\uddf7", label:"Super Lig" },
+  { match:["jupiler","belgian"],            color:"#C0392B", emoji:"\ud83c\udde7\ud83c\uddea", label:"Belgium" },
+  { match:["swiss super"],                  color:"#C0392B", emoji:"\ud83c\udde8\ud83c\udded", label:"Switzerland" },
+  { match:["greek super","super league gr"],color:"#1F6FEB", emoji:"\ud83c\uddec\ud83c\uddf7", label:"Greece" },
+  // Other continents
+  { match:["mls","major league soccer"],    color:"#2F37D9", emoji:"\ud83c\uddfa\ud83c\uddf8", label:"MLS" },
+  { match:["liga mx","mexic"],              color:"#159A56", emoji:"\ud83c\uddf2\ud83c\uddfd", label:"Liga MX" },
+  { match:["brasileir","brazil"],           color:"#C9A227", emoji:"\ud83c\udde7\ud83c\uddf7", label:"Brazil" },
+  { match:["argentin","liga profesional"],  color:"#4FA3D1", emoji:"\ud83c\udde6\ud83c\uddf7", label:"Argentina" },
+  { match:["saudi"],                        color:"#159A56", emoji:"\ud83c\uddf8\ud83c\udde6", label:"Saudi PL" },
+  { match:["j1","j-league","j league"],     color:"#C0392B", emoji:"\ud83c\uddef\ud83c\uddf5", label:"J-League" },
+  { match:["k league","k-league"],          color:"#C0392B", emoji:"\ud83c\uddf0\ud83c\uddf7", label:"K-League" },
+  { match:["south africa","psl","dstv prem"], color:"#159A56", emoji:"\ud83c\uddff\ud83c\udde6", label:"South Africa" },
+  // Domestic cups
+  { match:["fa cup","carabao","efl cup","league cup"], color:"#7A3FF2", emoji:"\ud83c\udfc6", label:"England Cup" },
+  { match:["copa del rey"],                 color:"#E23A45", emoji:"\ud83c\udfc6", label:"Copa del Rey" },
+  { match:["coppa italia"],                 color:"#159A56", emoji:"\ud83c\udfc6", label:"Coppa Italia" },
+  { match:["dfb"],                          color:"#D61F26", emoji:"\ud83c\udfc6", label:"DFB-Pokal" },
+  { match:["coupe de france"],              color:"#1B2A6B", emoji:"\ud83c\udfc6", label:"Coupe de France" },
+];
+function compTheme(league) {
+  const s = (league||"").toLowerCase();
+  return COMP_THEMES.find(t => t.match.some(m => s.includes(m))) || null;
+}
+
 /* kickoff → friendly local label + relative hint */
 function kickLabel(iso){
   if(!iso) return {when:"", rel:""};
@@ -447,15 +514,18 @@ function MatchCard({ m, hero, idx, bankroll }){
   const tip = matched ? p.tips?.result_pick : null;
   const dcTip = matched ? p.tips?.double_chance_pick : null;
   const cCol = tip ? confColor(tip.confidence) : C.cyan;
+  const ftheme = compTheme(m.league || m.competition || m.league_name || "");
 
   return (
     <div className="rl-card rl-press" onClick={()=> matched && setOpen(o=>!o)}
-      style={{...st.card, marginBottom:14, cursor: matched?"pointer":"default",
-        borderColor: hero ? "#2F37D933" : C.line, animationDelay:`${Math.min(idx,8)*0.05}s`,
-        background: hero ? "linear-gradient(180deg,#2F37D90c,transparent 60%)" : C.panel}}>
+      style={{...st.card, marginBottom:14, cursor: matched?"pointer":"default", position:"relative", overflow:"hidden",
+        borderColor: hero ? "#2F37D933" : (ftheme ? `${ftheme.color}2e` : C.line), animationDelay:`${Math.min(idx,8)*0.05}s`,
+        background: hero ? "linear-gradient(180deg,#2F37D90c,transparent 60%)" : (ftheme ? `linear-gradient(135deg,${ftheme.color}0e,${C.panel})` : C.panel)}}>
+
+      {ftheme && <div aria-hidden="true" style={{position:"absolute", top:"50%", right:-8, transform:"translateY(-50%)", pointerEvents:"none", zIndex:0, opacity:0.08, fontSize:62, lineHeight:1}}>{ftheme.emoji}</div>}
 
       {/* header row */}
-      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10}}>
+      <div style={{position:"relative", zIndex:1, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10}}>
         <div style={{minWidth:0}}>
           {hero && <div style={{fontFamily:mono, fontSize:8, color:C.cyan, letterSpacing:3, marginBottom:6}}>NEXT UP</div>}
           <div style={{fontFamily:orb, fontWeight:700, fontSize: hero?17:15, color:"var(--ink)", lineHeight:1.25}}>
@@ -467,6 +537,7 @@ function MatchCard({ m, hero, idx, bankroll }){
             </span>
             {k.rel && <span style={{fontFamily:mono, fontSize:9, color:C.cyan}}>· {k.rel}</span>}
             {p?.neutral_venue && <span style={{display:"flex", alignItems:"center", gap:3, fontFamily:mono, fontSize:9, color:C.soft}}>{Icon.pin()} neutral</span>}
+            {ftheme && <span style={{fontFamily:mono, fontSize:9, color:ftheme.color}}>{ftheme.emoji} {ftheme.label}</span>}
           </div>
         </div>
         {matched && Icon.chev(C.cyan, open)}
@@ -657,6 +728,8 @@ function ManualTab(){
   },[league]);
 
   const isIntl = league === 1;
+  const leagueName = (leagues.find(l=>l.league_id===league)||{}).name || "";
+  const mtheme = compTheme(leagueName);
 
   async function readMatch(){
     if(!home || !away || home===away){ setPErr("Pick two different teams."); return; }
@@ -744,13 +817,19 @@ function ManualTab(){
         const cCol = rTip ? confColor(rTip.confidence) : C.cyan;
         return (
           <div style={{animation:"fadeUp .4s ease"}}>
-            <div style={st.card}>
-              <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", flexWrap:"wrap"}}>
+            <div style={{...st.card, position:"relative", overflow:"hidden",
+              ...(mtheme ? {background:`linear-gradient(135deg,${mtheme.color}10,var(--surface))`, borderColor:`${mtheme.color}2e`} : {})}}>
+              {mtheme && (
+                <div aria-hidden="true" style={{position:"absolute", top:"50%", right:-10, transform:"translateY(-50%)",
+                  pointerEvents:"none", zIndex:0, opacity:0.09, fontSize:74, lineHeight:1}}>{mtheme.emoji}</div>
+              )}
+              <div style={{position:"relative", zIndex:1, display:"flex", justifyContent:"space-between", alignItems:"baseline", flexWrap:"wrap"}}>
                 <div style={{fontFamily:orb, fontWeight:700, fontSize:15, color:"var(--ink)"}}>
                   {short(home)} <span style={{color:C.mute}}>v</span> {short(away)}
                 </div>
                 <div style={{fontFamily:mono, fontSize:11, color:C.soft}}>xG {eg.home.toFixed(2)} – {eg.away.toFixed(2)}</div>
               </div>
+              {mtheme && <div style={{position:"relative", zIndex:1, fontFamily:mono, fontSize:9, color:mtheme.color, marginTop:2}}>{mtheme.emoji} {mtheme.label}</div>}
 
               <ProbBar probs={pred["1x2"]}/>
 
