@@ -1709,6 +1709,76 @@ function marketColor(market) {
   return key ? MARKET_COLORS[key] : "#2F37D9";
 }
 
+// Competition theming (legal): an accent colour + emoji motif per big competition.
+// No trademarked artwork is embedded. A LICENSED logo can be shown later simply by
+// adding a `logoUrl` to a tip — the watermark slot renders that image automatically
+// in place of the emoji, so no code change is needed once you have image rights.
+const COMP_THEMES = [
+  // International (nation) tournaments
+  { match:["world cup qualif","wc qualif","qualifier"], color:"#5A6270", emoji:"\u26bd", label:"WC Qualifiers" },
+  { match:["club world cup","fifa club"],   color:"#C9A227", emoji:"\ud83c\udfc6", label:"Club World Cup" },
+  { match:["world cup","fifa"],             color:"#C9A227", emoji:"\ud83c\udfc6", label:"World Cup" },
+  { match:["euro ","european championship","uefa euro"], color:"#1F6FEB", emoji:"\ud83c\udfc6", label:"Euros" },
+  { match:["nations league"],               color:"#2E4A8B", emoji:"\ud83c\udfc6", label:"Nations League" },
+  { match:["copa america","copa am\u00e9rica"], color:"#159A56", emoji:"\ud83c\udfc6", label:"Copa America" },
+  { match:["afcon","africa cup","cup of nations"], color:"#159A56", emoji:"\ud83c\udfc6", label:"AFCON" },
+  { match:["asian cup","afc asian"],        color:"#E8730C", emoji:"\ud83c\udfc6", label:"Asian Cup" },
+  { match:["gold cup","concacaf champ"],    color:"#C9A227", emoji:"\ud83c\udfc6", label:"Gold Cup" },
+  { match:["olympic"],                      color:"#C9A227", emoji:"\ud83e\udd47", label:"Olympics" },
+  { match:["friendly","friendlies"],        color:"#5A6270", emoji:"\ud83e\udd1d", label:"Friendly" },
+  // Continental club competitions
+  { match:["champions league","ucl"],       color:"#1F6FEB", emoji:"\u2b50", label:"UCL" },
+  { match:["europa league","uel"],          color:"#E8730C", emoji:"\ud83c\udfc6", label:"Europa" },
+  { match:["conference league","uecl"],     color:"#159A56", emoji:"\ud83c\udfc6", label:"Conference" },
+  { match:["libertadores"],                 color:"#159A56", emoji:"\ud83c\udfc6", label:"Libertadores" },
+  { match:["sudamericana"],                 color:"#E8730C", emoji:"\ud83c\udfc6", label:"Sudamericana" },
+  { match:["caf champions"],                color:"#159A56", emoji:"\ud83c\udfc6", label:"CAF CL" },
+  { match:["afc champions"],                color:"#E8730C", emoji:"\ud83c\udfc6", label:"AFC CL" },
+  { match:["super cup","supercup"],         color:"#C9A227", emoji:"\ud83c\udfc6", label:"Super Cup" },
+  // Country-specific leagues containing generic words (match BEFORE generic)
+  { match:["egyptian premier","egypt premier"], color:"#C0392B", emoji:"\ud83c\uddea\ud83c\uddec", label:"Egypt PL" },
+  { match:["russian premier"],              color:"#C0392B", emoji:"\ud83c\uddf7\ud83c\uddfa", label:"Russia PL" },
+  { match:["ukrainian premier"],            color:"#2E4A8B", emoji:"\ud83c\uddfa\ud83c\udde6", label:"Ukraine PL" },
+  { match:["scottish prem","scotland prem"],color:"#2E4A8B", emoji:"\ud83c\udff4", label:"Scotland" },
+  { match:["tanzania","ligi kuu","nbc premier"], color:"#159A56", emoji:"\ud83c\uddf9\ud83c\uddff", label:"Tanzania" },
+  { match:["indian super","isl "],          color:"#E8730C", emoji:"\ud83c\uddee\ud83c\uddf3", label:"India ISL" },
+  { match:["australian","a-league","a league"], color:"#C9A227", emoji:"\ud83c\udde6\ud83c\uddfa", label:"A-League" },
+  { match:["chinese super"],                color:"#C0392B", emoji:"\ud83c\udde8\ud83c\uddf3", label:"China CSL" },
+  // Top European leagues
+  { match:["premier league","epl"],         color:"#7A3FF2", emoji:"\ud83e\udd81", label:"Premier League" },
+  { match:["championship"],                 color:"#5B37B0", emoji:"\ud83e\udd81", label:"Championship" },
+  { match:["la liga","laliga","primera divi"], color:"#E23A45", emoji:"\ud83c\uddea\ud83c\uddf8", label:"La Liga" },
+  { match:["brasileir","serie a bra","brazil"], color:"#C9A227", emoji:"\ud83c\udde7\ud83c\uddf7", label:"Brazil" },
+  { match:["serie a"],                      color:"#159A56", emoji:"\ud83c\uddee\ud83c\uddf9", label:"Serie A" },
+  { match:["bundesliga"],                   color:"#D61F26", emoji:"\ud83c\udde9\ud83c\uddea", label:"Bundesliga" },
+  { match:["ligue 1"],                      color:"#1B2A6B", emoji:"\ud83c\uddeb\ud83c\uddf7", label:"Ligue 1" },
+  { match:["eredivisie"],                   color:"#E8730C", emoji:"\ud83c\uddf3\ud83c\uddf1", label:"Eredivisie" },
+  { match:["primeira","liga portugal"],     color:"#159A56", emoji:"\ud83c\uddf5\ud83c\uddf9", label:"Primeira" },
+  { match:["s\u00fcper lig","super lig"],   color:"#C0392B", emoji:"\ud83c\uddf9\ud83c\uddf7", label:"Super Lig" },
+  { match:["jupiler","belgian"],            color:"#C0392B", emoji:"\ud83c\udde7\ud83c\uddea", label:"Belgium" },
+  { match:["swiss super"],                  color:"#C0392B", emoji:"\ud83c\udde8\ud83c\udded", label:"Switzerland" },
+  { match:["greek super","super league gr"],color:"#1F6FEB", emoji:"\ud83c\uddec\ud83c\uddf7", label:"Greece" },
+  // Other continents
+  { match:["mls","major league soccer"],    color:"#2F37D9", emoji:"\ud83c\uddfa\ud83c\uddf8", label:"MLS" },
+  { match:["liga mx","mexic"],              color:"#159A56", emoji:"\ud83c\uddf2\ud83c\uddfd", label:"Liga MX" },
+  { match:["brasileir","brazil"],           color:"#C9A227", emoji:"\ud83c\udde7\ud83c\uddf7", label:"Brazil" },
+  { match:["argentin","liga profesional"],  color:"#4FA3D1", emoji:"\ud83c\udde6\ud83c\uddf7", label:"Argentina" },
+  { match:["saudi"],                        color:"#159A56", emoji:"\ud83c\uddf8\ud83c\udde6", label:"Saudi PL" },
+  { match:["j1","j-league","j league"],     color:"#C0392B", emoji:"\ud83c\uddef\ud83c\uddf5", label:"J-League" },
+  { match:["k league","k-league"],          color:"#C0392B", emoji:"\ud83c\uddf0\ud83c\uddf7", label:"K-League" },
+  { match:["south africa","psl","dstv prem"], color:"#159A56", emoji:"\ud83c\uddff\ud83c\udde6", label:"South Africa" },
+  // Domestic cups
+  { match:["fa cup","carabao","efl cup","league cup"], color:"#7A3FF2", emoji:"\ud83c\udfc6", label:"England Cup" },
+  { match:["copa del rey"],                 color:"#E23A45", emoji:"\ud83c\udfc6", label:"Copa del Rey" },
+  { match:["coppa italia"],                 color:"#159A56", emoji:"\ud83c\udfc6", label:"Coppa Italia" },
+  { match:["dfb"],                          color:"#D61F26", emoji:"\ud83c\udfc6", label:"DFB-Pokal" },
+  { match:["coupe de france"],              color:"#1B2A6B", emoji:"\ud83c\udfc6", label:"Coupe de France" },
+];
+function compTheme(league) {
+  const s = (league||"").toLowerCase();
+  return COMP_THEMES.find(t => t.match.some(m => s.includes(m))) || null;
+}
+
 function TipsTab({ plan, st, preset, onTrack }) {
   const bankroll = st ? (st.AB + st.SR) : 0;
   const [tips,     setTips]     = useState([]);
@@ -1916,6 +1986,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
         const isExp= expanded===tip.id;
         const conf = tip.confidence || 70;
         const neg  = typeof tip.value === "number" && tip.value < 0;
+        const theme = compTheme(tip.league);
 
         return (
           <button key={tip.id||i} onClick={()=>setExpanded(isExp?null:tip.id)}
@@ -1924,13 +1995,27 @@ function TipsTab({ plan, st, preset, onTrack }) {
               animation:`fadeUp ${0.2+i*0.05}s ease`}}>
             <div style={{...S.glassCard,marginBottom:0,padding:"14px",
               border:`1px solid ${neg?"rgba(var(--ink-rgb),0.12)":col+"22"}`,
-              background:neg?"rgba(var(--ink-rgb),0.02)":`linear-gradient(135deg,${col}06,var(--surface))`,
+              background:neg?"rgba(var(--ink-rgb),0.02)":(theme
+                ?`linear-gradient(135deg,${theme.color}14,${col}05,var(--surface))`
+                :`linear-gradient(135deg,${col}06,var(--surface))`),
               opacity:neg?0.5:1, filter:neg?"grayscale(0.9)":"none",
-              transition:"all .25s"}}>
+              overflow:"hidden", transition:"all .25s"}}>
 
               {/* Top accent */}
               <div style={{position:"absolute",top:0,left:0,right:0,height:1,
                 background:`linear-gradient(90deg,transparent,${col}66,transparent)`}}/>
+
+              {/* Competition motif watermark (legal emoji; renders a licensed logo if tip.logoUrl is set) */}
+              {theme && !neg && (
+                <div aria-hidden="true" style={{position:"absolute",top:"50%",right:-10,
+                  transform:"translateY(-50%)",pointerEvents:"none",zIndex:0,
+                  opacity:tip.logoUrl?0.16:0.09,
+                  fontSize:78,lineHeight:1}}>
+                  {tip.logoUrl
+                    ? <img src={tip.logoUrl} alt="" style={{width:74,height:74,objectFit:"contain"}}/>
+                    : theme.emoji}
+                </div>
+              )}
 
               {/* Header row */}
               <div style={{display:"flex",justifyContent:"space-between",
@@ -1941,8 +2026,8 @@ function TipsTab({ plan, st, preset, onTrack }) {
                     {tip.match}
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:8,
-                      color:"rgba(var(--ink-rgb),0.267)"}}>{tip.league}</span>
+                    <span style={{fontFamily:"'Inter',sans-serif",fontSize:8,position:"relative",zIndex:1,
+                      color:"rgba(var(--ink-rgb),0.267)"}}>{theme?`${theme.emoji} `:""}{tip.league}</span>
                     {tip.time&&<span style={{fontFamily:"'Inter',sans-serif",fontSize:8,
                       color:"rgba(var(--ink-rgb),0.2)"}}>· {tip.time}</span>}
                   </div>
