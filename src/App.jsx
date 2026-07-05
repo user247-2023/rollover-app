@@ -1789,6 +1789,8 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const [filter,   setFilter]   = useState("ALL");
   const [activeAIs,setActiveAIs]= useState([]);
   const [fixtures, setFixtures] = useState("");
+  const [fxCount,  setFxCount]  = useState(null);
+  const [hideNeg,  setHideNeg]  = useState(false);
 
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1817,6 +1819,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
       if (onTrack && (data.tips||[]).length) onTrack(data.tips);
       setActiveAIs(data.activeAIs || []);
       setFixtures(data.fixtureSource || "");
+      setFxCount(typeof data.fixturesFound === "number" ? data.fixturesFound : null);
       setLastFetch(Date.now());
     } catch (e) {
       setError(e.message || "Failed to load tips. Check your API key.");
@@ -1824,25 +1827,27 @@ function TipsTab({ plan, st, preset, onTrack }) {
     setLoading(false);
   };
 
-  const FILTERS = ["ALL","🔥 CONFIRMED","LOW RISK","OVER GOALS","UNDER GOALS","BTTS","CORNERS","CARDS","FOULS","OFFSIDES","SHOTS","THROW-INS","ODD/EVEN","HALVES","1ST HALF"];
+  // Filters match the markets the system ACTUALLY produces now (goals/result family)
+  const FILTERS = ["ALL","🔥 CONFIRMED","⚡ VALUE","LOW RISK","OVER GOALS","UNDER GOALS","BTTS","RESULT","DOUBLE CHANCE","TEAM GOALS","CLEAN SHEET","ODD/EVEN"];
   const filtered = tips.filter(t => {
+    if(hideNeg && typeof t.value === "number" && t.value < 0) return false;
+    const M = (t.market||"").toUpperCase(), P = (t.pick||"").toUpperCase();
     if(filter==="ALL") return true;
     if(filter==="🔥 CONFIRMED")  return t.confirmed || t.multiAI;
+    if(filter==="⚡ VALUE")      return typeof t.value === "number" && t.value > 0;
     if(filter==="LOW RISK")      return t.risk==="LOW";
-    if(filter==="OVER GOALS")    return (t.pick||"").toUpperCase().includes("OVER") && (t.market||"").toUpperCase().includes("GOAL");
-    if(filter==="UNDER GOALS")   return (t.pick||"").toUpperCase().includes("UNDER") && (t.market||"").toUpperCase().includes("GOAL");
-    if(filter==="BTTS")          return (t.market||"").toUpperCase().includes("BTTS") || (t.market||"").includes("Both Teams");
-    if(filter==="CORNERS")       return (t.market||"").toUpperCase().includes("CORNER");
-    if(filter==="CARDS")         return (t.market||"").toUpperCase().includes("CARD");
-    if(filter==="1ST HALF")      return (t.market||"").toUpperCase().includes("FIRST HALF") || (t.market||"").toUpperCase().includes("1ST HALF");
-    if(filter==="FOULS")         return (t.market||"").toUpperCase().includes("FOUL");
-    if(filter==="OFFSIDES")      return (t.market||"").toUpperCase().includes("OFFSIDE");
-    if(filter==="SHOTS")         return (t.market||"").toUpperCase().includes("SHOT");
-    if(filter==="THROW-INS")     return (t.market||"").toUpperCase().includes("THROW");
-    if(filter==="ODD/EVEN")      return (t.market||"").toUpperCase().includes("ODD") || (t.market||"").toUpperCase().includes("EVEN");
-    if(filter==="HALVES")        return (t.market||"").toUpperCase().includes("HIGHEST");
+    if(filter==="OVER GOALS")    return P.includes("OVER") && M.includes("GOAL");
+    if(filter==="UNDER GOALS")   return P.includes("UNDER") && M.includes("GOAL");
+    if(filter==="BTTS")          return M.includes("BTTS") || M.includes("BOTH TEAMS");
+    if(filter==="RESULT")        return M.includes("RESULT") || M.includes("DRAW NO BET");
+    if(filter==="DOUBLE CHANCE") return M.includes("DOUBLE");
+    if(filter==="TEAM GOALS")    return M.includes("TEAM");
+    if(filter==="CLEAN SHEET")   return M.includes("CLEAN");
+    if(filter==="ODD/EVEN")      return M.includes("ODD") || M.includes("EVEN");
     return true;
   });
+  const valueCount = tips.filter(t=>typeof t.value==="number"&&t.value>0).length;
+  const negCount   = tips.filter(t=>typeof t.value==="number"&&t.value<0).length;
 
   const riskColor = r => r==="LOW"?"#159A56":r==="MEDIUM"?"#E08A00":"#DC3B3B";
 
@@ -1878,9 +1883,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
             <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:"rgba(var(--ink-rgb),0.2)",marginBottom:4}}>
               {lastFetch ? `Updated ${Math.round((Date.now()-lastFetch)/60000)}m ago` : "Not loaded"}
             </div>
-            <button onClick={fetchTips} disabled={loading}
+            <button onClick={fetchTips} disabled={loading} aria-label="Fetch today's tips"
               style={{background:loading?"rgba(var(--ink-rgb),0.039)":preset.gradient,
-                border:"none",borderRadius:8,padding:"8px 14px",cursor:loading?"not-allowed":"pointer",
+                border:"none",borderRadius:8,padding:"12px 16px",minHeight:44,cursor:loading?"not-allowed":"pointer",
                 fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:10,
                 color:loading?"rgba(var(--ink-rgb),0.267)":"#000",letterSpacing:1,
                 boxShadow:loading?"none":`0 0 20px ${preset.glow}`}}>
@@ -1895,6 +1900,37 @@ function TipsTab({ plan, st, preset, onTrack }) {
           color:"#E08A0088",lineHeight:1.6}}>
           ⚠ AI tips are analytical suggestions only, not guarantees. Always combine with your own research. Bet responsibly.
         </div>
+
+        {/* Slate summary + no-value toggle */}
+        {tips.length>0 && (
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:10,flexWrap:"wrap"}}>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.4)",letterSpacing:0.5}}>
+              <b style={{color:"var(--ink)"}}>{tips.length}</b> tips
+              {fxCount!=null && <> · <b style={{color:"var(--ink)"}}>{fxCount}</b> matches</>}
+              {valueCount>0 && <> · <b style={{color:"#E08A00"}}>{valueCount}</b> value</>}
+              {negCount>0 && <> · {negCount} no-value</>}
+            </div>
+            {negCount>0 && (
+              <button onClick={()=>setHideNeg(v=>!v)} aria-label={hideNeg?"Show no-value tips":"Hide no-value tips"}
+                style={{minHeight:32,padding:"6px 12px",borderRadius:20,cursor:"pointer",
+                  background:hideNeg?`${preset.color}18`:"transparent",
+                  border:`1px solid ${hideNeg?preset.color+"66":"rgba(var(--ink-rgb),0.15)"}`,
+                  fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9,letterSpacing:1,
+                  color:hideNeg?preset.color:"rgba(var(--ink-rgb),0.4)"}}>
+                {hideNeg?"✕ NO-VALUE HIDDEN":"HIDE NO-VALUE"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Off-season honesty note */}
+        {fxCount!=null && fxCount<8 && tips.length>0 && (
+          <div style={{marginTop:8,fontFamily:"'Inter',sans-serif",fontSize:8.5,lineHeight:1.6,
+            color:"rgba(var(--ink-rgb),0.3)"}}>
+            Few matches today — European club leagues are on their summer break, so tips currently come
+            from internationals. Coverage widens automatically when club seasons restart in August.
+          </div>
+        )}
       </div>
 
       {/* Loading skeleton */}
