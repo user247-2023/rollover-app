@@ -39,11 +39,12 @@ function calcWD(AB, day, lastWD, crossed, wdPct) {
     const w=AB*wdPct; wd+=w;
     reasons.push(`Weekly (${(wdPct*100).toFixed(0)}%): ${fmt(w)}`);
   }
-  for(const ms of MILESTONES) {
-    if(AB>=ms && !crossed.includes(ms)) {
-      const w=AB*0.35; wd+=w;
-      reasons.push(`Milestone ${fmt(ms)}: ${fmt(w)}`);
-    }
+  const newMs = MILESTONES.filter(ms => AB>=ms && !crossed.includes(ms));
+  if(newMs.length) {
+    // one milestone payout per win — never stack them
+    const top = newMs[newMs.length-1];
+    const w = AB*0.35; wd += w;
+    reasons.push(`Milestone ${fmt(top)}: ${fmt(w)}`);
   }
   return {wd, reasons};
 }
@@ -229,7 +230,11 @@ function stakeRating(confidence) {
 }
 
 function makeState(starting) {
-  return {day:1,AB:parseFloat(starting),SR:0,totalSR:0,streak:0,losses:0,lastWD:0,crossed:[],history:[],tipResults:[]};
+  const s0 = parseFloat(starting) || 0;
+  // Milestones at or below the STARTING bank are pre-marked as already passed —
+  // withdrawals should only trigger on growth beyond where the plan began.
+  return {day:1,AB:s0,SR:0,totalSR:0,streak:0,losses:0,lastWD:0,
+          crossed:MILESTONES.filter(m => m <= s0),history:[],tipResults:[]};
 }
 
 // ── Unique device ID ────────────────────────────────────────────
@@ -2196,11 +2201,139 @@ function TipsTab({ plan, st, preset, onTrack }) {
               {isExp && (
                 <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid rgba(var(--ink-rgb),0.031)",
                   animation:"fadeUp .2s ease"}}>
-                  {/* Reasoning */}
-                  <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
-                    color:"rgba(var(--ink-rgb),0.467)",lineHeight:1.7,marginBottom:12}}>
-                    {tip.reasoning}
-                  </div>
+                  {/* ── Deep grounded analysis ── */}
+                  {tip.analysis && (() => {
+                    const A = tip.analysis;
+                    const vc = A.verdict?.color==="green" ? "#159A56"
+                             : A.verdict?.color==="amber" ? "#E08A00"
+                             : A.verdict?.color==="red"   ? "#DC3B3B" : "rgba(var(--ink-rgb),0.35)";
+                    const Row = ({k,v}) => (
+                      <div style={{display:"flex",justifyContent:"space-between",gap:10,marginBottom:4}}>
+                        <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.35)"}}>{k}</span>
+                        <span style={{fontFamily:"'Space Grotesk',sans-serif",fontSize:9,fontWeight:600,color:"var(--ink)",textAlign:"right"}}>{v}</span>
+                      </div>
+                    );
+                    const Sec = ({title,children}) => (
+                      <div style={{marginBottom:12}}>
+                        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,color:col+"88",
+                          letterSpacing:2,marginBottom:7}}>{title}</div>
+                        {children}
+                      </div>
+                    );
+                    const f = A.form || {};
+                    return (
+                      <div>
+                        {/* Verdict */}
+                        <div style={{background:`${vc}12`,border:`1px solid ${vc}44`,borderRadius:8,
+                          padding:"10px 12px",marginBottom:12}}>
+                          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,
+                            fontSize:12,color:vc,letterSpacing:1,marginBottom:4}}>{A.verdict?.label}</div>
+                          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                            color:"rgba(var(--ink-rgb),0.5)",lineHeight:1.6}}>{A.verdict?.reason}</div>
+                        </div>
+
+                        {/* Form */}
+                        {(f.home || f.away) && (
+                          <Sec title="RECENT FORM (LAST 6)">
+                            {["home","away"].map(sd => f[sd] && (
+                              <div key={sd} style={{marginBottom:8}}>
+                                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,
+                                  color:"var(--ink)",marginBottom:4}}>
+                                  {sd==="home" ? tip.home_team : tip.away_team}
+                                  <span style={{fontFamily:"'Inter',sans-serif",fontWeight:400,fontSize:9,
+                                    color:vc,marginLeft:8,letterSpacing:1}}>{f[sd].form_string}</span>
+                                </div>
+                                <Row k="Record" v={f[sd].record}/>
+                                <Row k="Scored / conceded per game" v={`${f[sd].scored_pg} / ${f[sd].conceded_pg}`}/>
+                                <Row k="Clean sheets / blanks" v={`${f[sd].clean_sheets} / ${f[sd].failed_to_score}`}/>
+                                <Row k="Over 2.5 · BTTS" v={`${f[sd].over25} · ${f[sd].btts}`}/>
+                              </div>
+                            ))}
+                            {f.note && <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                              color:"#E08A0099",marginTop:4}}>{f.note}</div>}
+                          </Sec>
+                        )}
+
+                        {/* H2H */}
+                        {A.h2h && (
+                          <Sec title="HEAD TO HEAD">
+                            {A.h2h.meetings ? (<>
+                              <Row k="Meetings" v={A.h2h.meetings}/>
+                              <Row k="Average goals" v={A.h2h.avg_goals}/>
+                              <Row k="Over 2.5 · BTTS" v={`${A.h2h.over25} · ${A.h2h.btts}`}/>
+                              {A.h2h.results?.slice(0,3).map((r,i)=>(
+                                <div key={i} style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                                  color:"rgba(var(--ink-rgb),0.3)",marginTop:3}}>{r}</div>
+                              ))}
+                            </>) : (
+                              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                                color:"rgba(var(--ink-rgb),0.3)"}}>{A.h2h.note}</div>
+                            )}
+                          </Sec>
+                        )}
+
+                        {/* Model */}
+                        {A.model && (
+                          <Sec title="MODEL READ">
+                            {A.model.expected_goals!=null && <Row k="Expected goals (total)" v={A.model.expected_goals}/>}
+                            <Row k="Model probability" v={`${A.model.model_probability}%`}/>
+                            {A.model.fair_odds && <Row k="Fair odds" v={A.model.fair_odds}/>}
+                            {A.model.calibrated && <Row k="Calibration" v="Self-corrected ✓"/>}
+                          </Sec>
+                        )}
+
+                        {/* Market */}
+                        {A.market && (
+                          <Sec title="MARKET">
+                            {A.market.has_live_price ? (<>
+                              <Row k="Bookmaker odds" v={A.market.bookmaker_odds}/>
+                              <Row k="Implied probability" v={`${A.market.implied_probability}%`}/>
+                              <Row k="Edge" v={`${A.market.edge_pct>=0?"+":""}${A.market.edge_pct}%`}/>
+                              <Row k="Verdict" v={A.market.positive_ev ? "+EV" : "Negative EV"}/>
+                            </>) : (
+                              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                                color:"rgba(var(--ink-rgb),0.35)",lineHeight:1.6}}>{A.market.note}</div>
+                            )}
+                          </Sec>
+                        )}
+
+                        {/* Correlation warning */}
+                        {A.correlation && (
+                          <div style={{background:"#E08A000c",border:"1px solid #E08A0033",borderRadius:8,
+                            padding:"8px 10px",marginBottom:12,fontFamily:"'Inter',sans-serif",
+                            fontSize:8.5,color:"#E08A00aa",lineHeight:1.6}}>
+                            ⚠ {A.correlation}
+                          </div>
+                        )}
+
+                        {/* Honest data gaps */}
+                        {A.data_gaps?.length>0 && (
+                          <Sec title="NOT FACTORED IN">
+                            {A.data_gaps.map((g,i)=>(
+                              <div key={i} style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                                color:"rgba(var(--ink-rgb),0.25)",marginBottom:3}}>· {g}</div>
+                            ))}
+                          </Sec>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* AI commentary — clearly separated from verified data */}
+                  {tip.reasoning && (
+                    <div style={{marginBottom:12}}>
+                      {tip.ai_unverified && (
+                        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                          color:"rgba(var(--ink-rgb),0.25)",letterSpacing:2,marginBottom:6}}>
+                          AI COMMENTARY (UNVERIFIED)
+                        </div>
+                      )}
+                      <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                        color:"rgba(var(--ink-rgb),0.467)",lineHeight:1.7}}>
+                        {tip.reasoning}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Key stats */}
                   {tip.key_stats?.length>0 && (
@@ -2247,11 +2380,35 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
                   {/* Smart Stake Card */}
                   {bankroll > 0 && (() => {
-                    const odds = tip.bookmaker_odds || parseFloat((tip.odds_range||"1.85").split("-")[0]) || 1.85;
-                    const stake = calcKellyStake(bankroll, conf, odds);
-                    const prob = confidenceToProb(conf);
-                    const val = (prob * odds) - 1;
-                    const rating = stakeRating(conf);
+                    const odds  = tip.bookmaker_odds;
+                    const prob  = tip.predicted_probability;
+                    const val   = tip.value;
+                    const hasEdge = typeof val === "number" && typeof odds === "number" && odds > 1;
+
+                    // No confirmed market price -> state that plainly. Never
+                    // manufacture an edge from a guessed price.
+                    if(!hasEdge) {
+                      return (
+                        <div style={{marginTop:10,background:"rgba(var(--ink-rgb),0.02)",
+                          border:"1px solid rgba(var(--ink-rgb),0.08)",borderRadius:8,padding:"10px 12px"}}>
+                          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+                            color:"rgba(var(--ink-rgb),0.3)",letterSpacing:2,marginBottom:6}}>STAKE GUIDANCE</div>
+                          <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                            color:"rgba(var(--ink-rgb),0.4)",lineHeight:1.6}}>
+                            No confirmed market price for this pick, so no edge can be calculated
+                            {tip.fair_odds ? <> — model fair odds are <b style={{color:"var(--ink)"}}>{tip.fair_odds}</b>. Only bet if your bookmaker pays more than that.</> : "."}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const b = odds - 1;
+                    const kelly = b > 0 ? (b*prob - (1-prob))/b : 0;
+                    const stake = Math.round(bankroll * Math.max(0, Math.min(kelly*0.25, 0.02)));
+                    const rating = val >= 0.08 ? { label:"STRONG BET", color:"#159A56", pct:"1.5-2%" }
+                                 : val >= 0.03 ? { label:"GOOD BET",   color:"#2F37D9", pct:"1-1.5%" }
+                                 : val >= 0     ? { label:"MARGINAL",   color:"#E08A00", pct:"0.5%" }
+                                 :                { label:"NO VALUE - SKIP", color:"#DC3B3B", pct:"0%" };
                     return (
                       <div style={{marginTop:10,background:`${rating.color}10`,
                         border:`1px solid ${rating.color}33`,borderRadius:8,padding:"10px 12px"}}>
@@ -2261,8 +2418,8 @@ function TipsTab({ plan, st, preset, onTrack }) {
                         </div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:6}}>
                           {[
-                            ["STAKE", fmt(stake,plan.currency), rating.color],
-                            ["USD", `$${(stake/TSH_TO_USD).toFixed(2)}`, rating.color],
+                            ["STAKE", val>0 ? fmt(stake,plan.currency) : fmt(0,plan.currency), rating.color],
+                            ["ODDS", odds.toFixed(2), rating.color],
                             ["EDGE", `${val>=0?"+":""}${(val*100).toFixed(1)}%`, val>=0?"#159A56":"#DC3B3B"],
                           ].map(([l,v,c])=>(
                             <div key={l} style={{background:"rgba(var(--ink-rgb),0.024)",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
