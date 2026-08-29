@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase.js";
 import {
+  getAuth, onAuthStateChanged, signOut,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  RecaptchaVerifier, signInWithPhoneNumber,
+} from "firebase/auth";
+import {
   doc, getDoc, setDoc, onSnapshot
 } from "firebase/firestore";
 import PredictScreen from "./PredictScreen.jsx";
@@ -1510,6 +1515,19 @@ function SetTab({plan,preset,onDelete,onUpdate}) {
           </div>
         )}
       </div>
+      {/* Admin access — paste your INTERNAL_API_KEY once to reveal the admin panel */}
+      <div style={{...S.glassCard,marginBottom:12}}>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",
+          letterSpacing:3,marginBottom:10}}>ADMIN ACCESS</div>
+        <input defaultValue={getAdminKey()} placeholder="Paste your admin key"
+          onBlur={e=>saveAdminKey(e.target.value.trim())} type="password"
+          style={{...S.input,fontSize:11}}/>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
+          color:"rgba(var(--ink-rgb),0.25)",marginTop:6,lineHeight:1.5}}>
+          Owner only. Stored on this device; unlocks the tip upload panel in TIPS.
+        </div>
+      </div>
+
       <div style={S.glassCard}>
         <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:12}}>PLAN CONFIG</div>
         {[["Plan",`${preset.emoji} ${plan.name||preset.label}`],["Odds","× "+plan.odds],
@@ -1784,7 +1802,504 @@ function compTheme(league) {
   return COMP_THEMES.find(t => t.match.some(m => s.includes(m))) || null;
 }
 
+/* ── Subscriber access ───────────────────────────────────────────
+   The real paywall lives on the server; this only stores the code and
+   shows a friendly unlock screen. A device id is sent so one code can be
+   limited to a couple of devices instead of being shared endlessly. */
+const API_BASE = "https://web-production-6371a.up.railway.app";
+
+/* ── Account + subscription ──────────────────────────────────────
+   Sign-in is handled by Firebase Auth (phone OTP or email). The server
+   verifies the resulting ID token on every tips request and checks the
+   subscription in Firestore — the app never decides this for itself. */
+function useAccount() {
+  const [user, setUser]       = useState(null);
+  const [ready, setReady]     = useState(false);
+  const [sub, setSub]         = useState(null);
+  const refresh = async (u) => {
+    const who = u || getAuth().currentUser;
+    if(!who) { setSub(null); return null; }
+    try {
+      const token = await who.getIdToken();
+      const r = await fetch(`${API_BASE}/api/me`, { headers:{ Authorization:`Bearer ${token}` }});
+      const d = await r.json();
+      setSub(d.subscription || null);
+      return d.subscription;
+    } catch(e) { return null; }
+  };
+  useEffect(() => {
+    let live = true;
+    const unsub = onAuthStateChanged(getAuth(), async (u) => {
+      if(!live) return;
+      setUser(u); setReady(true);
+      if(u) await refresh(u); else setSub(null);
+    });
+    return () => { live = false; unsub && unsub(); };
+  }, []);
+  return { user, ready, sub, refresh };
+}
+
+async function authedFetch(path, opts = {}) {
+  const u = getAuth().currentUser;
+  const headers = { "Content-Type":"application/json", ...(opts.headers||{}) };
+  if(u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
+  return fetch(`${API_BASE}${path}`, { ...opts, headers });
+}
+
+const ADMIN_KEY = "rollover_admin_key";
+function getAdminKey(){ try { return localStorage.getItem(ADMIN_KEY) || ""; } catch(e){ return ""; } }
+function saveAdminKey(k){ try { k ? localStorage.setItem(ADMIN_KEY, k) : localStorage.removeItem(ADMIN_KEY); } catch(e){} }
+
+const ACCESS_KEY = "rollover_access_code";
+// device id: reuses the app's existing one (same value as the save code)
+
+function getAccessCode() {
+  try { return localStorage.getItem(ACCESS_KEY) || ""; } catch(e) { return ""; }
+}
+function saveAccessCode(c) {
+  try { c ? localStorage.setItem(ACCESS_KEY, c) : localStorage.removeItem(ACCESS_KEY); } catch(e) {}
+}
+
+/* ── Premium (admin-curated) rollover tips ───────────────────── */
+function PremiumTips({ preset, plan, account, onSubscribe }) {
+  const [data, setData]   = useState(null);
+  const [state, setState] = useState("loading");   // loading | ok | locked | error
+  const tier = plan?.odds ? Number(plan.odds).toFixed(2) : "1.20";
+
+  const load = async () => {
+    setState("loading");
+    try {
+      const headers = { "X-Access-Code": getAccessCode() };
+      const u = getAuth().currentUser;
+      if(u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
+      const r = await fetch(`${API_BASE}/api/curated?tier=${tier}`, { headers });
+      const d = await r.json();
+      if(r.status === 402) { setState("locked"); return; }
+      setData(d); setState("ok");
+    } catch(e) { setState("error"); }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tier, account?.sub?.active]);
+
+  const badge = (st) => st==="WON"  ? {t:"✓ WON",  c:"#159A56"}
+                      : st==="LOST" ? {t:"✕ LOST", c:"#DC3B3B"}
+                      : st==="VOID" ? {t:"VOID",   c:"#E08A00"}
+                      :               {t:"PENDING",c:"rgba(var(--ink-rgb),0.35)"};
+
+  return (
+    <div style={{...S.glassCard, marginBottom:14,
+      border:`1px solid ${preset.color}33`,
+      background:`linear-gradient(135deg,${preset.color}0c,var(--surface))`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+            color:preset.color,letterSpacing:1}}>★ ROLLOVER TIPS · ×{tier}</div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+            color:"rgba(var(--ink-rgb),0.3)",marginTop:2}}>Hand-picked for your plan</div>
+        </div>
+        <button onClick={load} aria-label="Refresh premium tips"
+          style={{minHeight:32,padding:"6px 12px",borderRadius:20,cursor:"pointer",
+            background:"transparent",border:`1px solid ${preset.color}44`,
+            fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9,color:preset.color}}>↻</button>
+      </div>
+
+      {state==="loading" && <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,
+        color:"rgba(var(--ink-rgb),0.3)",padding:"8px 0"}}>Loading…</div>}
+
+      {state==="locked" && (
+        <div>
+          <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,
+            color:"rgba(var(--ink-rgb),0.45)",lineHeight:1.6,marginBottom:10}}>
+            🔒 These are the daily rollover picks for the ×{tier} plan. Subscribe to unlock them.
+            The free AI tips below stay available to everyone.
+          </div>
+          <button onClick={onSubscribe}
+            style={{...S.winBtn,width:"100%",minHeight:44,background:preset.gradient,color:"#000",
+              boxShadow:`0 4px 20px ${preset.glow}`}}>SUBSCRIBE</button>
+        </div>
+      )}
+
+      {state==="error" && <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,
+        color:"#DC3B3B"}}>Couldn't load premium tips.</div>}
+
+      {state==="ok" && (!data?.tips?.length ? (
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,
+          color:"rgba(var(--ink-rgb),0.3)",lineHeight:1.6}}>
+          No tips posted yet for today. Check back later.
+        </div>
+      ) : (<>
+        {data.note && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+          color:"rgba(var(--ink-rgb),0.4)",marginBottom:10,lineHeight:1.5}}>{data.note}</div>}
+        {data.tips.map(t=>{
+          const b = badge(t.status);
+          return (
+            <div key={t.id} style={{background:"rgba(var(--ink-rgb),0.02)",
+              border:"1px solid rgba(var(--ink-rgb),0.06)",borderRadius:10,
+              padding:"10px 12px",marginBottom:8,
+              opacity:t.status==="LOST"?0.55:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8,marginBottom:4}}>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,
+                  fontSize:11,color:"var(--ink)"}}>{t.match}</div>
+                <div style={{fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:8,
+                  color:b.c,letterSpacing:1,whiteSpace:"nowrap"}}>{b.t}</div>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
+                  color:preset.color}}>{t.pick}</span>
+                {t.odds && <span style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                  color:"rgba(var(--ink-rgb),0.4)"}}>@ {t.odds}</span>}
+                {t.kickoff && <span style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                  color:"rgba(var(--ink-rgb),0.25)"}}>· {t.kickoff}</span>}
+              </div>
+              {(t.league || t.market) && (
+                <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                  color:"rgba(var(--ink-rgb),0.25)",marginTop:3}}>
+                  {[t.league,t.market].filter(Boolean).join(" · ")}
+                </div>
+              )}
+              {t.note && <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                color:"rgba(var(--ink-rgb),0.35)",marginTop:5,lineHeight:1.5}}>{t.note}</div>}
+            </div>
+          );
+        })}
+      </>))}
+    </div>
+  );
+}
+
+/* ── Admin: upload and settle the daily rollover tips ─────────── */
+function AdminPanel({ preset, onClose }) {
+  const [key]      = useState(() => getAdminKey());
+  const [tier, setTier] = useState("1.20");
+  const [form, setForm] = useState({match:"",league:"",market:"",pick:"",odds:"",kickoff:"",note:""});
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg]   = useState("");
+
+  const load = async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/curated/list?key=${encodeURIComponent(key)}&tier=all`);
+      const d = await r.json();
+      setList(d.tiers || null);
+    } catch(e){ setMsg("Could not load."); }
+  };
+  useEffect(()=>{ load(); /* eslint-disable-next-line */ },[]);
+
+  const add = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/curated/add?key=${encodeURIComponent(key)}`,{
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ ...form, tier, odds: form.odds?parseFloat(form.odds):null })});
+      const d = await r.json();
+      if(!r.ok){ setMsg(typeof d.detail==="string"?d.detail:"Failed to add."); }
+      else { setForm({match:"",league:"",market:"",pick:"",odds:"",kickoff:"",note:""}); setMsg("Tip added."); load(); }
+    } catch(e){ setMsg("Failed to add."); }
+    setBusy(false);
+  };
+
+  const settle = async (t, id, status) => {
+    await fetch(`${API_BASE}/api/admin/curated/settle?key=${encodeURIComponent(key)}&tier=${t}&id=${id}&status=${status}`);
+    load();
+  };
+  const settleAll = async (t, status) => {
+    await fetch(`${API_BASE}/api/admin/curated/settle?key=${encodeURIComponent(key)}&tier=${t}&status=${status}&all=1`);
+    load();
+  };
+  const del = async (t, id) => {
+    await fetch(`${API_BASE}/api/admin/curated/delete?key=${encodeURIComponent(key)}&tier=${t}&id=${id}`);
+    load();
+  };
+
+  const Fld = ({k,ph,type}) => (
+    <input value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}
+      placeholder={ph} type={type||"text"} style={{...S.input,marginBottom:8}}/>
+  );
+
+  return (
+    <div style={{...S.screen,animation:"fadeUp .3s ease"}}>
+      <button onClick={onClose} style={{...S.backBtn,alignSelf:"flex-start",marginBottom:16}}>← BACK</button>
+      <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:22,
+        color:"var(--ink)",marginBottom:14}}>Admin · Rollover Tips</div>
+
+      <div style={{...S.glassCard,marginBottom:14}}>
+        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:2,
+          color:"rgba(var(--ink-rgb),0.3)",marginBottom:10}}>ADD A TIP</div>
+        <div style={{display:"flex",gap:8,marginBottom:10}}>
+          {["1.10","1.20","1.50"].map(t=>(
+            <button key={t} onClick={()=>setTier(t)}
+              style={{flex:1,minHeight:34,borderRadius:8,cursor:"pointer",
+                background:tier===t?`${preset.color}18`:"transparent",
+                border:`1px solid ${tier===t?preset.color+"66":"rgba(var(--ink-rgb),0.12)"}`,
+                fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
+                color:tier===t?preset.color:"rgba(var(--ink-rgb),0.4)"}}>×{t}</button>
+          ))}
+        </div>
+        <Fld k="match"   ph="Flamengo vs Palmeiras"/>
+        <Fld k="pick"    ph="Over 1.5 Goals"/>
+        <div style={{display:"flex",gap:8}}>
+          <div style={{flex:1}}><Fld k="odds" ph="1.22" type="number"/></div>
+          <div style={{flex:1}}><Fld k="kickoff" ph="22:00"/></div>
+        </div>
+        <Fld k="league"  ph="Serie A (Brazil)"/>
+        <Fld k="market"  ph="Over/Under 1.5 Goals"/>
+        <Fld k="note"    ph="Optional note for subscribers"/>
+        <button onClick={add} disabled={busy || !form.match.trim() || !form.pick.trim()}
+          style={{...S.winBtn,width:"100%",minHeight:44,
+            background:(busy||!form.match.trim()||!form.pick.trim())?"rgba(var(--ink-rgb),0.06)":preset.gradient,
+            color:(busy||!form.match.trim()||!form.pick.trim())?"rgba(var(--ink-rgb),0.3)":"#000"}}>
+          {busy?"ADDING…":"ADD TIP"}
+        </button>
+        {msg && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+          color:"rgba(var(--ink-rgb),0.4)",marginTop:8}}>{msg}</div>}
+      </div>
+
+      {list && Object.entries(list).map(([t,d])=>(
+        <div key={t} style={{...S.glassCard,marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+              color:preset.color}}>×{t} · {d.tips?.length||0} tips</div>
+            {(d.tips||[]).some(x=>x.status==="PENDING") && (
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>settleAll(t,"WON")}
+                  style={{padding:"6px 10px",minHeight:32,borderRadius:8,cursor:"pointer",
+                    background:"#159A5618",border:"1px solid #159A5666",color:"#159A56",
+                    fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9}}>ALL WON</button>
+                <button onClick={()=>settleAll(t,"LOST")}
+                  style={{padding:"6px 10px",minHeight:32,borderRadius:8,cursor:"pointer",
+                    background:"#DC3B3B18",border:"1px solid #DC3B3B66",color:"#DC3B3B",
+                    fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9}}>ALL LOST</button>
+              </div>
+            )}
+          </div>
+          {(d.tips||[]).length===0 && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+            color:"rgba(var(--ink-rgb),0.25)"}}>None yet.</div>}
+          {(d.tips||[]).map(tip=>(
+            <div key={tip.id} style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:8,
+              padding:"8px 10px",marginBottom:6}}>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,
+                color:"var(--ink)"}}>{tip.match}</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
+                color:"rgba(var(--ink-rgb),0.4)",marginTop:2}}>
+                {tip.pick}{tip.odds?` @ ${tip.odds}`:""} · <b style={{
+                  color: tip.status==="WON"?"#159A56":tip.status==="LOST"?"#DC3B3B":"rgba(var(--ink-rgb),0.35)"
+                }}>{tip.status}</b>
+              </div>
+              <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                {["WON","LOST","PENDING"].map(st=>(
+                  <button key={st} onClick={()=>settle(t,tip.id,st)}
+                    style={{padding:"5px 9px",minHeight:30,borderRadius:6,cursor:"pointer",
+                      background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.12)",
+                      fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                      color: st==="WON"?"#159A56":st==="LOST"?"#DC3B3B":"rgba(var(--ink-rgb),0.35)"}}>{st}</button>
+                ))}
+                <button onClick={()=>del(t,tip.id)}
+                  style={{padding:"5px 9px",minHeight:30,borderRadius:6,cursor:"pointer",
+                    background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.12)",
+                    fontFamily:"'Inter',sans-serif",fontSize:8.5,
+                    color:"rgba(var(--ink-rgb),0.25)"}}>DELETE</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Sign in / sign up ───────────────────────────────────────── */
+function AuthPanel({ preset, onDone }) {
+  const [mode, setMode]   = useState("phone");   // phone | email
+  const [phone, setPhone] = useState("+255");
+  const [code, setCode]   = useState("");
+  const [conf, setConf]   = useState(null);
+  const [email, setEmail] = useState("");
+  const [pw, setPw]       = useState("");
+  const [isNew, setIsNew] = useState(false);
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState("");
+
+  const sendCode = async () => {
+    setBusy(true); setErr("");
+    try {
+      const auth = getAuth();
+      if(!window.__recaptcha) {
+        window.__recaptcha = new RecaptchaVerifier(auth, "recaptcha-holder", { size:"invisible" });
+      }
+      setConf(await signInWithPhoneNumber(auth, phone.trim(), window.__recaptcha));
+    } catch(e) { setErr(e.message || "Could not send the code."); }
+    setBusy(false);
+  };
+  const verify = async () => {
+    setBusy(true); setErr("");
+    try { await conf.confirm(code.trim()); onDone && onDone(); }
+    catch(e) { setErr("That code isn't right."); }
+    setBusy(false);
+  };
+  const doEmail = async () => {
+    setBusy(true); setErr("");
+    try {
+      const auth = getAuth();
+      if(isNew) await createUserWithEmailAndPassword(auth, email.trim(), pw);
+      else      await signInWithEmailAndPassword(auth, email.trim(), pw);
+      onDone && onDone();
+    } catch(e) { setErr((e.code||"").includes("wrong-password") ? "Wrong password." : (e.message||"Sign-in failed.")); }
+    setBusy(false);
+  };
+
+  const Btn = ({children, onClick, disabled}) => (
+    <button onClick={onClick} disabled={disabled||busy}
+      style={{...S.winBtn,width:"100%",marginTop:10,minHeight:44,
+        background:(disabled||busy)?"rgba(var(--ink-rgb),0.06)":preset.gradient,
+        color:(disabled||busy)?"rgba(var(--ink-rgb),0.3)":"#000",
+        boxShadow:(disabled||busy)?"none":`0 4px 20px ${preset.glow}`}}>{children}</button>
+  );
+
+  return (
+    <div style={{marginTop:12,background:"rgba(var(--ink-rgb),0.02)",
+      border:"1px solid rgba(var(--ink-rgb),0.1)",borderRadius:10,padding:14}}>
+      <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+        color:"var(--ink)",letterSpacing:1,marginBottom:4}}>SIGN IN</div>
+      <div style={{fontFamily:"'Inter',sans-serif",fontSize:9.5,
+        color:"rgba(var(--ink-rgb),0.4)",lineHeight:1.6,marginBottom:12}}>
+        Create an account or sign in to subscribe.
+      </div>
+
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        {["phone","email"].map(m=>(
+          <button key={m} onClick={()=>{setMode(m);setErr("");}}
+            style={{flex:1,minHeight:34,borderRadius:8,cursor:"pointer",
+              background:mode===m?`${preset.color}18`:"transparent",
+              border:`1px solid ${mode===m?preset.color+"66":"rgba(var(--ink-rgb),0.12)"}`,
+              fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9,letterSpacing:1,
+              color:mode===m?preset.color:"rgba(var(--ink-rgb),0.4)"}}>
+            {m==="phone"?"PHONE":"EMAIL"}
+          </button>
+        ))}
+      </div>
+
+      {mode==="phone" ? (
+        conf ? (<>
+          <input value={code} onChange={e=>setCode(e.target.value)} placeholder="6-digit code"
+            inputMode="numeric" style={{...S.input,textAlign:"center",letterSpacing:4}}/>
+          <Btn onClick={verify} disabled={code.trim().length<4}>VERIFY</Btn>
+        </>) : (<>
+          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+255 7XX XXX XXX"
+            inputMode="tel" style={S.input}/>
+          <Btn onClick={sendCode} disabled={phone.trim().length<10}>SEND CODE</Btn>
+        </>)
+      ) : (<>
+        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"
+          inputMode="email" style={{...S.input,marginBottom:8}}/>
+        <input value={pw} onChange={e=>setPw(e.target.value)} placeholder="Password" type="password"
+          style={S.input}/>
+        <Btn onClick={doEmail} disabled={!email.trim()||pw.length<6}>
+          {isNew?"CREATE ACCOUNT":"SIGN IN"}
+        </Btn>
+        <button onClick={()=>{setIsNew(v=>!v);setErr("");}}
+          style={{background:"none",border:"none",cursor:"pointer",width:"100%",marginTop:10,
+            fontFamily:"'Inter',sans-serif",fontSize:9,color:preset.color}}>
+          {isNew?"I already have an account":"New here? Create an account"}
+        </button>
+      </>)}
+
+      <div id="recaptcha-holder"/>
+      {err && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#DC3B3B",
+        marginTop:10,lineHeight:1.5}}>{err}</div>}
+    </div>
+  );
+}
+
+/* ── Subscribe / pay ─────────────────────────────────────────── */
+function Paywall({ preset, subState, onActivated }) {
+  const [plans, setPlans]   = useState(null);
+  const [chosen, setChosen] = useState("monthly");
+  const [phone, setPhone]   = useState("");
+  const [busy, setBusy]     = useState(false);
+  const [msg, setMsg]       = useState("");
+  const [ref, setRef]       = useState("");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/plans`).then(r=>r.json())
+      .then(d=>setPlans(d.plans||null)).catch(()=>{});
+  }, []);
+
+  const pay = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await authedFetch("/api/pay/initiate", {
+        method:"POST", body: JSON.stringify({ plan: chosen, phone }) });
+      const d = await r.json();
+      if(!r.ok) { setMsg(typeof d.detail==="string"?d.detail:"Could not start payment."); setBusy(false); return; }
+      setRef(d.reference || "");
+      setMsg(d.message || "Check your phone to confirm.");
+      // poll for activation
+      let tries = 0;
+      const poll = setInterval(async () => {
+        tries++;
+        try {
+          const pr = await authedFetch(`/api/pay/status?reference=${encodeURIComponent(d.reference)}`);
+          const pd = await pr.json();
+          if(pd?.subscription?.active) { clearInterval(poll); setBusy(false); onActivated && onActivated(); }
+          else if(pd?.status === "FAILED") { clearInterval(poll); setBusy(false); setMsg("Payment failed or was cancelled."); }
+        } catch(e){}
+        if(tries > 40) { clearInterval(poll); setBusy(false); }
+      }, 4000);
+    } catch(e) { setMsg("Could not start payment."); setBusy(false); }
+  };
+
+  return (
+    <div style={{marginTop:12,background:"#E08A000a",border:"1px solid #E08A0044",
+      borderRadius:10,padding:14}}>
+      <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+        color:"#E08A00",letterSpacing:1,marginBottom:4}}>🔒 SUBSCRIBE TO UNLOCK TIPS</div>
+      <div style={{fontFamily:"'Inter',sans-serif",fontSize:9.5,
+        color:"rgba(var(--ink-rgb),0.45)",lineHeight:1.6,marginBottom:12}}>
+        {subState?.reason==="expired"
+          ? "Your subscription has expired. Renew to keep getting tips."
+          : "Choose a plan and pay with mobile money."}
+      </div>
+
+      {plans && (
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          {Object.entries(plans).map(([k,p])=>(
+            <button key={k} onClick={()=>setChosen(k)}
+              style={{flex:1,padding:"10px 6px",borderRadius:10,cursor:"pointer",textAlign:"center",
+                background:chosen===k?`${preset.color}18`:"transparent",
+                border:`1px solid ${chosen===k?preset.color+"88":"rgba(var(--ink-rgb),0.12)"}`}}>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,letterSpacing:1,
+                color:"rgba(var(--ink-rgb),0.4)"}}>{p.label}</div>
+              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+                color:chosen===k?preset.color:"var(--ink)",marginTop:3}}>
+                {(p.price||0).toLocaleString()}
+              </div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:7.5,
+                color:"rgba(var(--ink-rgb),0.3)"}}>TZS</div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <input value={phone} onChange={e=>setPhone(e.target.value)}
+        placeholder="Mobile money number (07XX XXX XXX)" inputMode="tel" style={S.input}/>
+      <button onClick={pay} disabled={busy || phone.replace(/\D/g,"").length<9}
+        style={{...S.winBtn,width:"100%",marginTop:10,minHeight:44,
+          background:(busy||phone.replace(/\D/g,"").length<9)?"rgba(var(--ink-rgb),0.06)":preset.gradient,
+          color:(busy||phone.replace(/\D/g,"").length<9)?"rgba(var(--ink-rgb),0.3)":"#000"}}>
+        {busy ? "WAITING FOR PAYMENT…" : "PAY WITH MOBILE MONEY"}
+      </button>
+
+      {msg && (
+        <div style={{marginTop:10,fontFamily:"'Inter',sans-serif",fontSize:9,
+          color:"rgba(var(--ink-rgb),0.45)",lineHeight:1.6}}>
+          {msg}{ref && <div style={{marginTop:4,color:preset.color}}>Ref: {ref}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TipsTab({ plan, st, preset, onTrack }) {
+  const account = useAccount();
   const bankroll = st ? (st.AB + st.SR) : 0;
   const [tips,     setTips]     = useState([]);
   const [loading,  setLoading]  = useState(false);
@@ -1796,6 +2311,9 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const [fixtures, setFixtures] = useState("");
   const [fxCount,  setFxCount]  = useState(null);
   const [hideNeg,  setHideNeg]  = useState(false);
+  const [locked,   setLocked]   = useState(null);   // subscription message
+  const [showAdmin,setShowAdmin]= useState(false);
+  const [codeInput,setCodeInput]= useState("");
 
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1805,12 +2323,22 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const fetchTips = async () => {
     setLoading(true); setError(null);
     try {
+      const accessCode = getAccessCode();
+      const fbUser = getAuth().currentUser;
+      const idToken = fbUser ? await fbUser.getIdToken() : "";
       const res = await fetch("/api/tips", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          "X-Access-Code": accessCode,
+          "X-Device-Id": getDeviceId(),
+        },
         body: JSON.stringify({
           // Send the user's LOCAL date, not server UTC date
           date: new Date().toLocaleDateString("en-CA", { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+          access: accessCode,
+          device: getDeviceId(),
         }),
       });
       // Safely handle non-JSON responses
@@ -1818,6 +2346,15 @@ function TipsTab({ plan, st, preset, onTrack }) {
       let data;
       try { data = JSON.parse(text); }
       catch(e) { throw new Error("Server returned an unexpected response. Check Vercel logs."); }
+
+      // 402 = subscription required / expired / revoked
+      const det = data?.detail;
+      if (res.status === 402 || (det && det.error)) {
+        setLocked((det && det.message) || "A subscription is required to get tips.");
+        setLoading(false);
+        return;
+      }
+      setLocked(null);
       if (data.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
       if (data.message) { setError(data.message); setLoading(false); return; }
       setTips(data.tips || []);
@@ -1856,8 +2393,12 @@ function TipsTab({ plan, st, preset, onTrack }) {
 
   const riskColor = r => r==="LOW"?"#159A56":r==="MEDIUM"?"#E08A00":"#DC3B3B";
 
+  if(showAdmin) return <AdminPanel preset={preset} onClose={()=>setShowAdmin(false)}/>;
+
   return (
     <div>
+      <PremiumTips preset={preset} plan={plan} account={account}
+        onSubscribe={()=>setLocked("Subscribe to unlock the daily rollover tips.")}/>
       {/* Header card */}
       <div style={{...S.glassCard, background:`linear-gradient(135deg,${preset.color}0a,transparent)`,
         border:`1px solid ${preset.color}33`, marginBottom:12, padding:"14px"}}>
@@ -1905,6 +2446,65 @@ function TipsTab({ plan, st, preset, onTrack }) {
           color:"#E08A0088",lineHeight:1.6}}>
           ⚠ AI tips are analytical suggestions only, not guarantees. Always combine with your own research. Bet responsibly.
         </div>
+
+        {/* Admin entry (only visible once an admin key is stored) */}
+        {getAdminKey() && (
+          <button onClick={()=>setShowAdmin(true)}
+            style={{width:"100%",minHeight:36,marginTop:10,borderRadius:8,cursor:"pointer",
+              background:"transparent",border:`1px dashed ${preset.color}55`,
+              fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9,letterSpacing:1,
+              color:preset.color}}>⚙ ADMIN · UPLOAD / SETTLE TIPS</button>
+        )}
+
+        {/* Account + subscription */}
+        {account.ready && !account.user && (
+          <AuthPanel preset={preset} onDone={()=>{ setLocked(null); account.refresh(); }}/>
+        )}
+        {account.ready && account.user && account.sub && !account.sub.active && (
+          <Paywall preset={preset} subState={account.sub}
+            onActivated={()=>{ setLocked(null); account.refresh(); fetchTips(); }}/>
+        )}
+        {account.ready && account.user && (
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            marginTop:10,fontFamily:"'Inter',sans-serif",fontSize:8.5,
+            color:"rgba(var(--ink-rgb),0.3)"}}>
+            <span>{account.user.phoneNumber || account.user.email}
+              {account.sub?.active && <span style={{color:"#159A56"}}> · active to {String(account.sub.expires).slice(0,10)}</span>}
+            </span>
+            <button onClick={()=>signOut(getAuth())}
+              style={{background:"none",border:"none",cursor:"pointer",
+                fontFamily:"'Inter',sans-serif",fontSize:8.5,color:"rgba(var(--ink-rgb),0.35)"}}>
+              Sign out
+            </button>
+          </div>
+        )}
+
+        {/* Legacy access-code lock (still works for comped codes) */}
+        {locked && !account.user && (
+          <div style={{marginTop:12,background:"#E08A000c",border:"1px solid #E08A0044",
+            borderRadius:10,padding:"14px"}}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
+              color:"#E08A00",letterSpacing:1,marginBottom:6}}>🔒 SUBSCRIPTION REQUIRED</div>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:10,
+              color:"rgba(var(--ink-rgb),0.5)",lineHeight:1.6,marginBottom:12}}>{locked}</div>
+            <input value={codeInput} onChange={e=>setCodeInput(e.target.value.toUpperCase())}
+              placeholder="ROLL-XXXX-XXXX" aria-label="Access code"
+              style={{...S.input,letterSpacing:2,textAlign:"center",
+                fontFamily:"'Space Grotesk',sans-serif",border:"1px solid #E08A0055"}}/>
+            <button onClick={()=>{ saveAccessCode(codeInput.trim()); setLocked(null); setCodeInput(""); fetchTips(); }}
+              disabled={!codeInput.trim()}
+              style={{...S.winBtn,width:"100%",marginTop:10,minHeight:44,
+                background:codeInput.trim()?preset.gradient:"rgba(var(--ink-rgb),0.06)",
+                color:codeInput.trim()?"#000":"rgba(var(--ink-rgb),0.3)",
+                boxShadow:codeInput.trim()?`0 4px 20px ${preset.glow}`:"none"}}>
+              UNLOCK TIPS
+            </button>
+            <div style={{fontFamily:"'Inter',sans-serif",fontSize:8.5,
+              color:"rgba(var(--ink-rgb),0.3)",lineHeight:1.6,marginTop:10,textAlign:"center"}}>
+              Don't have a code? Contact the owner to subscribe.
+            </div>
+          </div>
+        )}
 
         {/* Slate summary + no-value toggle */}
         {tips.length>0 && (
