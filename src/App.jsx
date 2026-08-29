@@ -3,7 +3,6 @@ import { db } from "./firebase.js";
 import {
   getAuth, onAuthStateChanged, signOut,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  RecaptchaVerifier, signInWithPhoneNumber,
 } from "firebase/auth";
 import {
   doc, getDoc, setDoc, onSnapshot
@@ -1968,52 +1967,71 @@ function PremiumTips({ preset, plan, account, onSubscribe }) {
 
 /* ── Admin: upload and settle the daily rollover tips ─────────── */
 function AdminPanel({ preset, onClose }) {
-  const [key]      = useState(() => getAdminKey());
   const [tier, setTier] = useState("1.20");
-  const [form, setForm] = useState({match:"",league:"",market:"",pick:"",odds:"",kickoff:"",note:""});
+  // NOTE: these are separate useState values, and every <input> below is written
+  // inline. An earlier version built the inputs from a helper component declared
+  // inside this function — React then treated it as a NEW component type on each
+  // keystroke, unmounted the field and stole the caret. Never nest a component
+  // that renders an input inside another component's body.
+  const [match, setMatch]     = useState("");
+  const [pick, setPick]       = useState("");
+  const [odds, setOdds]       = useState("");
+  const [kickoff, setKickoff] = useState("");
+  const [league, setLeague]   = useState("");
+  const [market, setMarket]   = useState("");
+  const [note, setNote]       = useState("");
   const [list, setList] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg]   = useState("");
 
+  const call = async (path) => {
+    const headers = {};
+    const u = getAuth().currentUser;
+    if(u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
+    const k = getAdminKey();
+    const sep = path.includes("?") ? "&" : "?";
+    const url = `${API_BASE}${path}${k ? `${sep}key=${encodeURIComponent(k)}` : ""}`;
+    return fetch(url, { headers });
+  };
+
   const load = async () => {
     try {
-      const r = await fetch(`${API_BASE}/api/admin/curated/list?key=${encodeURIComponent(key)}&tier=all`);
+      const r = await call("/api/admin/curated/list?tier=all");
+      if(r.status === 401){ setMsg("Not authorised. Sign in with your admin email, or set your admin key in plan Settings."); return; }
       const d = await r.json();
-      setList(d.tiers || null);
-    } catch(e){ setMsg("Could not load."); }
+      setList(d.tiers || null); setMsg("");
+    } catch(e){ setMsg("Could not load tips."); }
   };
   useEffect(()=>{ load(); /* eslint-disable-next-line */ },[]);
 
   const add = async () => {
     setBusy(true); setMsg("");
     try {
-      const r = await fetch(`${API_BASE}/api/admin/curated/add?key=${encodeURIComponent(key)}`,{
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ ...form, tier, odds: form.odds?parseFloat(form.odds):null })});
-      const d = await r.json();
-      if(!r.ok){ setMsg(typeof d.detail==="string"?d.detail:"Failed to add."); }
-      else { setForm({match:"",league:"",market:"",pick:"",odds:"",kickoff:"",note:""}); setMsg("Tip added."); load(); }
+      const headers = {"Content-Type":"application/json"};
+      const u = getAuth().currentUser;
+      if(u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
+      const k = getAdminKey();
+      const r = await fetch(`${API_BASE}/api/admin/curated/add${k?`?key=${encodeURIComponent(k)}`:""}`, {
+        method:"POST", headers,
+        body: JSON.stringify({ tier, match, pick, league, market, note, kickoff,
+                               odds: odds ? parseFloat(odds) : null })});
+      if(r.status === 401){ setMsg("Not authorised."); }
+      else if(!r.ok){ const d = await r.json().catch(()=>({})); setMsg(typeof d.detail==="string"?d.detail:"Failed to add."); }
+      else {
+        setMatch(""); setPick(""); setOdds(""); setKickoff("");
+        setLeague(""); setMarket(""); setNote("");
+        setMsg("Tip added."); load();
+      }
     } catch(e){ setMsg("Failed to add."); }
     setBusy(false);
   };
 
-  const settle = async (t, id, status) => {
-    await fetch(`${API_BASE}/api/admin/curated/settle?key=${encodeURIComponent(key)}&tier=${t}&id=${id}&status=${status}`);
-    load();
-  };
-  const settleAll = async (t, status) => {
-    await fetch(`${API_BASE}/api/admin/curated/settle?key=${encodeURIComponent(key)}&tier=${t}&status=${status}&all=1`);
-    load();
-  };
-  const del = async (t, id) => {
-    await fetch(`${API_BASE}/api/admin/curated/delete?key=${encodeURIComponent(key)}&tier=${t}&id=${id}`);
-    load();
-  };
+  const settle    = async (t,id,st) => { await call(`/api/admin/curated/settle?tier=${t}&id=${id}&status=${st}`); load(); };
+  const settleAll = async (t,st)    => { await call(`/api/admin/curated/settle?tier=${t}&status=${st}&all=1`); load(); };
+  const del       = async (t,id)    => { await call(`/api/admin/curated/delete?tier=${t}&id=${id}`); load(); };
 
-  const Fld = ({k,ph,type}) => (
-    <input value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}
-      placeholder={ph} type={type||"text"} style={{...S.input,marginBottom:8}}/>
-  );
+  const inputStyle = {...S.input, marginBottom:8};
+  const canAdd = match.trim() && pick.trim();
 
   return (
     <div style={{...S.screen,animation:"fadeUp .3s ease"}}>
@@ -2034,23 +2052,32 @@ function AdminPanel({ preset, onClose }) {
                 color:tier===t?preset.color:"rgba(var(--ink-rgb),0.4)"}}>×{t}</button>
           ))}
         </div>
-        <Fld k="match"   ph="Flamengo vs Palmeiras"/>
-        <Fld k="pick"    ph="Over 1.5 Goals"/>
+
+        <input value={match} onChange={e=>setMatch(e.target.value)}
+          placeholder="Flamengo vs Palmeiras" style={inputStyle}/>
+        <input value={pick} onChange={e=>setPick(e.target.value)}
+          placeholder="Over 1.5 Goals" style={inputStyle}/>
         <div style={{display:"flex",gap:8}}>
-          <div style={{flex:1}}><Fld k="odds" ph="1.22" type="number"/></div>
-          <div style={{flex:1}}><Fld k="kickoff" ph="22:00"/></div>
+          <input value={odds} onChange={e=>setOdds(e.target.value)} placeholder="1.22"
+            type="number" step="0.01" inputMode="decimal" style={{...inputStyle,flex:1}}/>
+          <input value={kickoff} onChange={e=>setKickoff(e.target.value)} placeholder="22:00"
+            style={{...inputStyle,flex:1}}/>
         </div>
-        <Fld k="league"  ph="Serie A (Brazil)"/>
-        <Fld k="market"  ph="Over/Under 1.5 Goals"/>
-        <Fld k="note"    ph="Optional note for subscribers"/>
-        <button onClick={add} disabled={busy || !form.match.trim() || !form.pick.trim()}
+        <input value={league} onChange={e=>setLeague(e.target.value)}
+          placeholder="Serie A (Brazil)" style={inputStyle}/>
+        <input value={market} onChange={e=>setMarket(e.target.value)}
+          placeholder="Over/Under 1.5 Goals" style={inputStyle}/>
+        <input value={note} onChange={e=>setNote(e.target.value)}
+          placeholder="Optional note for subscribers" style={inputStyle}/>
+
+        <button onClick={add} disabled={busy || !canAdd}
           style={{...S.winBtn,width:"100%",minHeight:44,
-            background:(busy||!form.match.trim()||!form.pick.trim())?"rgba(var(--ink-rgb),0.06)":preset.gradient,
-            color:(busy||!form.match.trim()||!form.pick.trim())?"rgba(var(--ink-rgb),0.3)":"#000"}}>
+            background:(busy||!canAdd)?"rgba(var(--ink-rgb),0.06)":preset.gradient,
+            color:(busy||!canAdd)?"rgba(var(--ink-rgb),0.3)":"#000"}}>
           {busy?"ADDING…":"ADD TIP"}
         </button>
         {msg && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
-          color:"rgba(var(--ink-rgb),0.4)",marginTop:8}}>{msg}</div>}
+          color:"rgba(var(--ink-rgb),0.45)",marginTop:8,lineHeight:1.5}}>{msg}</div>}
       </div>
 
       {list && Object.entries(list).map(([t,d])=>(
@@ -2108,101 +2135,69 @@ function AdminPanel({ preset, onClose }) {
 
 /* ── Sign in / sign up ───────────────────────────────────────── */
 function AuthPanel({ preset, onDone }) {
-  const [mode, setMode]   = useState("phone");   // phone | email
-  const [phone, setPhone] = useState("+255");
-  const [code, setCode]   = useState("");
-  const [conf, setConf]   = useState(null);
   const [email, setEmail] = useState("");
   const [pw, setPw]       = useState("");
   const [isNew, setIsNew] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState("");
 
-  const sendCode = async () => {
-    setBusy(true); setErr("");
-    try {
-      const auth = getAuth();
-      if(!window.__recaptcha) {
-        window.__recaptcha = new RecaptchaVerifier(auth, "recaptcha-holder", { size:"invisible" });
-      }
-      setConf(await signInWithPhoneNumber(auth, phone.trim(), window.__recaptcha));
-    } catch(e) { setErr(e.message || "Could not send the code."); }
-    setBusy(false);
-  };
-  const verify = async () => {
-    setBusy(true); setErr("");
-    try { await conf.confirm(code.trim()); onDone && onDone(); }
-    catch(e) { setErr("That code isn't right."); }
-    setBusy(false);
-  };
-  const doEmail = async () => {
+  const submit = async () => {
     setBusy(true); setErr("");
     try {
       const auth = getAuth();
       if(isNew) await createUserWithEmailAndPassword(auth, email.trim(), pw);
       else      await signInWithEmailAndPassword(auth, email.trim(), pw);
       onDone && onDone();
-    } catch(e) { setErr((e.code||"").includes("wrong-password") ? "Wrong password." : (e.message||"Sign-in failed.")); }
+    } catch(e) {
+      const c = e.code || "";
+      setErr(c.includes("wrong-password") || c.includes("invalid-credential") ? "Wrong email or password."
+           : c.includes("email-already-in-use") ? "That email already has an account — sign in instead."
+           : c.includes("weak-password") ? "Password must be at least 6 characters."
+           : c.includes("invalid-email") ? "That doesn't look like a valid email."
+           : (e.message || "Sign-in failed."));
+    }
     setBusy(false);
   };
 
-  const Btn = ({children, onClick, disabled}) => (
-    <button onClick={onClick} disabled={disabled||busy}
-      style={{...S.winBtn,width:"100%",marginTop:10,minHeight:44,
-        background:(disabled||busy)?"rgba(var(--ink-rgb),0.06)":preset.gradient,
-        color:(disabled||busy)?"rgba(var(--ink-rgb),0.3)":"#000",
-        boxShadow:(disabled||busy)?"none":`0 4px 20px ${preset.glow}`}}>{children}</button>
-  );
+  const ready = email.trim().includes("@") && pw.length >= 6;
 
   return (
     <div style={{marginTop:12,background:"rgba(var(--ink-rgb),0.02)",
       border:"1px solid rgba(var(--ink-rgb),0.1)",borderRadius:10,padding:14}}>
       <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
-        color:"var(--ink)",letterSpacing:1,marginBottom:4}}>SIGN IN</div>
+        color:"var(--ink)",letterSpacing:1,marginBottom:4}}>
+        {isNew ? "CREATE ACCOUNT" : "SIGN IN"}
+      </div>
       <div style={{fontFamily:"'Inter',sans-serif",fontSize:9.5,
         color:"rgba(var(--ink-rgb),0.4)",lineHeight:1.6,marginBottom:12}}>
-        Create an account or sign in to subscribe.
+        {isNew ? "Use your email and a password of at least 6 characters."
+               : "Sign in to manage your subscription."}
       </div>
 
-      <div style={{display:"flex",gap:8,marginBottom:12}}>
-        {["phone","email"].map(m=>(
-          <button key={m} onClick={()=>{setMode(m);setErr("");}}
-            style={{flex:1,minHeight:34,borderRadius:8,cursor:"pointer",
-              background:mode===m?`${preset.color}18`:"transparent",
-              border:`1px solid ${mode===m?preset.color+"66":"rgba(var(--ink-rgb),0.12)"}`,
-              fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9,letterSpacing:1,
-              color:mode===m?preset.color:"rgba(var(--ink-rgb),0.4)"}}>
-            {m==="phone"?"PHONE":"EMAIL"}
-          </button>
-        ))}
-      </div>
+      <input value={email} onChange={e=>setEmail(e.target.value)}
+        placeholder="you@example.com" type="email" inputMode="email"
+        autoComplete="email" autoCapitalize="none" autoCorrect="off"
+        style={{...S.input,marginBottom:8}}/>
+      <input value={pw} onChange={e=>setPw(e.target.value)}
+        placeholder="Password" type="password"
+        autoComplete={isNew ? "new-password" : "current-password"}
+        onKeyDown={e=>{ if(e.key==="Enter" && ready && !busy) submit(); }}
+        style={S.input}/>
 
-      {mode==="phone" ? (
-        conf ? (<>
-          <input value={code} onChange={e=>setCode(e.target.value)} placeholder="6-digit code"
-            inputMode="numeric" style={{...S.input,textAlign:"center",letterSpacing:4}}/>
-          <Btn onClick={verify} disabled={code.trim().length<4}>VERIFY</Btn>
-        </>) : (<>
-          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+255 7XX XXX XXX"
-            inputMode="tel" style={S.input}/>
-          <Btn onClick={sendCode} disabled={phone.trim().length<10}>SEND CODE</Btn>
-        </>)
-      ) : (<>
-        <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"
-          inputMode="email" style={{...S.input,marginBottom:8}}/>
-        <input value={pw} onChange={e=>setPw(e.target.value)} placeholder="Password" type="password"
-          style={S.input}/>
-        <Btn onClick={doEmail} disabled={!email.trim()||pw.length<6}>
-          {isNew?"CREATE ACCOUNT":"SIGN IN"}
-        </Btn>
-        <button onClick={()=>{setIsNew(v=>!v);setErr("");}}
-          style={{background:"none",border:"none",cursor:"pointer",width:"100%",marginTop:10,
-            fontFamily:"'Inter',sans-serif",fontSize:9,color:preset.color}}>
-          {isNew?"I already have an account":"New here? Create an account"}
-        </button>
-      </>)}
+      <button onClick={submit} disabled={!ready || busy}
+        style={{...S.winBtn,width:"100%",marginTop:10,minHeight:44,
+          background:(!ready||busy)?"rgba(var(--ink-rgb),0.06)":preset.gradient,
+          color:(!ready||busy)?"rgba(var(--ink-rgb),0.3)":"#000",
+          boxShadow:(!ready||busy)?"none":`0 4px 20px ${preset.glow}`}}>
+        {busy ? "PLEASE WAIT…" : (isNew ? "CREATE ACCOUNT" : "SIGN IN")}
+      </button>
 
-      <div id="recaptcha-holder"/>
+      <button onClick={()=>{setIsNew(v=>!v);setErr("");}}
+        style={{background:"none",border:"none",cursor:"pointer",width:"100%",marginTop:10,
+          fontFamily:"'Inter',sans-serif",fontSize:9,color:preset.color}}>
+        {isNew ? "I already have an account" : "New here? Create an account"}
+      </button>
+
       {err && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#DC3B3B",
         marginTop:10,lineHeight:1.5}}>{err}</div>}
     </div>
@@ -2313,6 +2308,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const [hideNeg,  setHideNeg]  = useState(false);
   const [locked,   setLocked]   = useState(null);   // subscription message
   const [showAdmin,setShowAdmin]= useState(false);
+  const [isAdmin,  setIsAdmin]  = useState(false);
   const [codeInput,setCodeInput]= useState("");
 
   const today = new Date().toLocaleDateString("en-CA", {
@@ -2391,6 +2387,22 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const valueCount = tips.filter(t=>typeof t.value==="number"&&t.value>0).length;
   const negCount   = tips.filter(t=>typeof t.value==="number"&&t.value<0).length;
 
+  // Ask the server whether this signed-in account is an admin.
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const u = getAuth().currentUser;
+      if(!u) { if(live) setIsAdmin(false); return; }
+      try {
+        const r = await fetch(`${API_BASE}/api/admin/me`, {
+          headers: { Authorization: `Bearer ${await u.getIdToken()}` }});
+        const d = await r.json();
+        if(live) setIsAdmin(!!d.is_admin);
+      } catch(e) { if(live) setIsAdmin(false); }
+    })();
+    return () => { live = false; };
+  }, [account.user]);
+
   const riskColor = r => r==="LOW"?"#159A56":r==="MEDIUM"?"#E08A00":"#DC3B3B";
 
   if(showAdmin) return <AdminPanel preset={preset} onClose={()=>setShowAdmin(false)}/>;
@@ -2448,7 +2460,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
         </div>
 
         {/* Admin entry (only visible once an admin key is stored) */}
-        {getAdminKey() && (
+        {(isAdmin || getAdminKey()) && (
           <button onClick={()=>setShowAdmin(true)}
             style={{width:"100%",minHeight:36,marginTop:10,borderRadius:8,cursor:"pointer",
               background:"transparent",border:`1px dashed ${preset.color}55`,
