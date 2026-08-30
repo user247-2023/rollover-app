@@ -3,6 +3,7 @@ import { db } from "./firebase.js";
 import {
   getAuth, onAuthStateChanged, signOut,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  sendEmailVerification, sendPasswordResetEmail,
 } from "firebase/auth";
 import {
   doc, getDoc, setDoc, onSnapshot
@@ -1514,19 +1515,6 @@ function SetTab({plan,preset,onDelete,onUpdate}) {
           </div>
         )}
       </div>
-      {/* Admin access — paste your INTERNAL_API_KEY once to reveal the admin panel */}
-      <div style={{...S.glassCard,marginBottom:12}}>
-        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",
-          letterSpacing:3,marginBottom:10}}>ADMIN ACCESS</div>
-        <input defaultValue={getAdminKey()} placeholder="Paste your admin key"
-          onBlur={e=>saveAdminKey(e.target.value.trim())} type="password"
-          style={{...S.input,fontSize:11}}/>
-        <div style={{fontFamily:"'Inter',sans-serif",fontSize:8,
-          color:"rgba(var(--ink-rgb),0.25)",marginTop:6,lineHeight:1.5}}>
-          Owner only. Stored on this device; unlocks the tip upload panel in TIPS.
-        </div>
-      </div>
-
       <div style={S.glassCard}>
         <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.133)",letterSpacing:3,marginBottom:12}}>PLAN CONFIG</div>
         {[["Plan",`${preset.emoji} ${plan.name||preset.label}`],["Odds","× "+plan.odds],
@@ -1845,10 +1833,6 @@ async function authedFetch(path, opts = {}) {
   return fetch(`${API_BASE}${path}`, { ...opts, headers });
 }
 
-const ADMIN_KEY = "rollover_admin_key";
-function getAdminKey(){ try { return localStorage.getItem(ADMIN_KEY) || ""; } catch(e){ return ""; } }
-function saveAdminKey(k){ try { k ? localStorage.setItem(ADMIN_KEY, k) : localStorage.removeItem(ADMIN_KEY); } catch(e){} }
-
 const ACCESS_KEY = "rollover_access_code";
 // device id: reuses the app's existing one (same value as the save code)
 
@@ -1966,173 +1950,6 @@ function PremiumTips({ preset, plan, account, onSubscribe }) {
 }
 
 /* ── Admin: upload and settle the daily rollover tips ─────────── */
-function AdminPanel({ preset, onClose }) {
-  const [tier, setTier] = useState("1.20");
-  // NOTE: these are separate useState values, and every <input> below is written
-  // inline. An earlier version built the inputs from a helper component declared
-  // inside this function — React then treated it as a NEW component type on each
-  // keystroke, unmounted the field and stole the caret. Never nest a component
-  // that renders an input inside another component's body.
-  const [match, setMatch]     = useState("");
-  const [pick, setPick]       = useState("");
-  const [odds, setOdds]       = useState("");
-  const [kickoff, setKickoff] = useState("");
-  const [league, setLeague]   = useState("");
-  const [market, setMarket]   = useState("");
-  const [note, setNote]       = useState("");
-  const [list, setList] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg]   = useState("");
-
-  const call = async (path) => {
-    const headers = {};
-    const u = getAuth().currentUser;
-    if(u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
-    const k = getAdminKey();
-    const sep = path.includes("?") ? "&" : "?";
-    const url = `${API_BASE}${path}${k ? `${sep}key=${encodeURIComponent(k)}` : ""}`;
-    return fetch(url, { headers });
-  };
-
-  const load = async () => {
-    try {
-      const r = await call("/api/admin/curated/list?tier=all");
-      if(r.status === 401){ setMsg("Not authorised. Sign in with your admin email, or set your admin key in plan Settings."); return; }
-      const d = await r.json();
-      setList(d.tiers || null); setMsg("");
-    } catch(e){ setMsg("Could not load tips."); }
-  };
-  useEffect(()=>{ load(); /* eslint-disable-next-line */ },[]);
-
-  const add = async () => {
-    setBusy(true); setMsg("");
-    try {
-      const headers = {"Content-Type":"application/json"};
-      const u = getAuth().currentUser;
-      if(u) headers.Authorization = `Bearer ${await u.getIdToken()}`;
-      const k = getAdminKey();
-      const r = await fetch(`${API_BASE}/api/admin/curated/add${k?`?key=${encodeURIComponent(k)}`:""}`, {
-        method:"POST", headers,
-        body: JSON.stringify({ tier, match, pick, league, market, note, kickoff,
-                               odds: odds ? parseFloat(odds) : null })});
-      if(r.status === 401){ setMsg("Not authorised."); }
-      else if(!r.ok){ const d = await r.json().catch(()=>({})); setMsg(typeof d.detail==="string"?d.detail:"Failed to add."); }
-      else {
-        setMatch(""); setPick(""); setOdds(""); setKickoff("");
-        setLeague(""); setMarket(""); setNote("");
-        setMsg("Tip added."); load();
-      }
-    } catch(e){ setMsg("Failed to add."); }
-    setBusy(false);
-  };
-
-  const settle    = async (t,id,st) => { await call(`/api/admin/curated/settle?tier=${t}&id=${id}&status=${st}`); load(); };
-  const settleAll = async (t,st)    => { await call(`/api/admin/curated/settle?tier=${t}&status=${st}&all=1`); load(); };
-  const del       = async (t,id)    => { await call(`/api/admin/curated/delete?tier=${t}&id=${id}`); load(); };
-
-  const inputStyle = {...S.input, marginBottom:8};
-  const canAdd = match.trim() && pick.trim();
-
-  return (
-    <div style={{...S.screen,animation:"fadeUp .3s ease"}}>
-      <button onClick={onClose} style={{...S.backBtn,alignSelf:"flex-start",marginBottom:16}}>← BACK</button>
-      <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:600,fontSize:22,
-        color:"var(--ink)",marginBottom:14}}>Admin · Rollover Tips</div>
-
-      <div style={{...S.glassCard,marginBottom:14}}>
-        <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,letterSpacing:2,
-          color:"rgba(var(--ink-rgb),0.3)",marginBottom:10}}>ADD A TIP</div>
-        <div style={{display:"flex",gap:8,marginBottom:10}}>
-          {["1.10","1.20","1.50"].map(t=>(
-            <button key={t} onClick={()=>setTier(t)}
-              style={{flex:1,minHeight:34,borderRadius:8,cursor:"pointer",
-                background:tier===t?`${preset.color}18`:"transparent",
-                border:`1px solid ${tier===t?preset.color+"66":"rgba(var(--ink-rgb),0.12)"}`,
-                fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,
-                color:tier===t?preset.color:"rgba(var(--ink-rgb),0.4)"}}>×{t}</button>
-          ))}
-        </div>
-
-        <input value={match} onChange={e=>setMatch(e.target.value)}
-          placeholder="Flamengo vs Palmeiras" style={inputStyle}/>
-        <input value={pick} onChange={e=>setPick(e.target.value)}
-          placeholder="Over 1.5 Goals" style={inputStyle}/>
-        <div style={{display:"flex",gap:8}}>
-          <input value={odds} onChange={e=>setOdds(e.target.value)} placeholder="1.22"
-            type="number" step="0.01" inputMode="decimal" style={{...inputStyle,flex:1}}/>
-          <input value={kickoff} onChange={e=>setKickoff(e.target.value)} placeholder="22:00"
-            style={{...inputStyle,flex:1}}/>
-        </div>
-        <input value={league} onChange={e=>setLeague(e.target.value)}
-          placeholder="Serie A (Brazil)" style={inputStyle}/>
-        <input value={market} onChange={e=>setMarket(e.target.value)}
-          placeholder="Over/Under 1.5 Goals" style={inputStyle}/>
-        <input value={note} onChange={e=>setNote(e.target.value)}
-          placeholder="Optional note for subscribers" style={inputStyle}/>
-
-        <button onClick={add} disabled={busy || !canAdd}
-          style={{...S.winBtn,width:"100%",minHeight:44,
-            background:(busy||!canAdd)?"rgba(var(--ink-rgb),0.06)":preset.gradient,
-            color:(busy||!canAdd)?"rgba(var(--ink-rgb),0.3)":"#000"}}>
-          {busy?"ADDING…":"ADD TIP"}
-        </button>
-        {msg && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
-          color:"rgba(var(--ink-rgb),0.45)",marginTop:8,lineHeight:1.5}}>{msg}</div>}
-      </div>
-
-      {list && Object.entries(list).map(([t,d])=>(
-        <div key={t} style={{...S.glassCard,marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,
-              color:preset.color}}>×{t} · {d.tips?.length||0} tips</div>
-            {(d.tips||[]).some(x=>x.status==="PENDING") && (
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>settleAll(t,"WON")}
-                  style={{padding:"6px 10px",minHeight:32,borderRadius:8,cursor:"pointer",
-                    background:"#159A5618",border:"1px solid #159A5666",color:"#159A56",
-                    fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9}}>ALL WON</button>
-                <button onClick={()=>settleAll(t,"LOST")}
-                  style={{padding:"6px 10px",minHeight:32,borderRadius:8,cursor:"pointer",
-                    background:"#DC3B3B18",border:"1px solid #DC3B3B66",color:"#DC3B3B",
-                    fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9}}>ALL LOST</button>
-              </div>
-            )}
-          </div>
-          {(d.tips||[]).length===0 && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
-            color:"rgba(var(--ink-rgb),0.25)"}}>None yet.</div>}
-          {(d.tips||[]).map(tip=>(
-            <div key={tip.id} style={{background:"rgba(var(--ink-rgb),0.02)",borderRadius:8,
-              padding:"8px 10px",marginBottom:6}}>
-              <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:10,
-                color:"var(--ink)"}}>{tip.match}</div>
-              <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,
-                color:"rgba(var(--ink-rgb),0.4)",marginTop:2}}>
-                {tip.pick}{tip.odds?` @ ${tip.odds}`:""} · <b style={{
-                  color: tip.status==="WON"?"#159A56":tip.status==="LOST"?"#DC3B3B":"rgba(var(--ink-rgb),0.35)"
-                }}>{tip.status}</b>
-              </div>
-              <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-                {["WON","LOST","PENDING"].map(st=>(
-                  <button key={st} onClick={()=>settle(t,tip.id,st)}
-                    style={{padding:"5px 9px",minHeight:30,borderRadius:6,cursor:"pointer",
-                      background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.12)",
-                      fontFamily:"'Inter',sans-serif",fontSize:8.5,
-                      color: st==="WON"?"#159A56":st==="LOST"?"#DC3B3B":"rgba(var(--ink-rgb),0.35)"}}>{st}</button>
-                ))}
-                <button onClick={()=>del(t,tip.id)}
-                  style={{padding:"5px 9px",minHeight:30,borderRadius:6,cursor:"pointer",
-                    background:"transparent",border:"1px solid rgba(var(--ink-rgb),0.12)",
-                    fontFamily:"'Inter',sans-serif",fontSize:8.5,
-                    color:"rgba(var(--ink-rgb),0.25)"}}>DELETE</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ── Sign in / sign up ───────────────────────────────────────── */
 function AuthPanel({ preset, onDone }) {
   const [email, setEmail] = useState("");
@@ -2145,8 +1962,13 @@ function AuthPanel({ preset, onDone }) {
     setBusy(true); setErr("");
     try {
       const auth = getAuth();
-      if(isNew) await createUserWithEmailAndPassword(auth, email.trim(), pw);
-      else      await signInWithEmailAndPassword(auth, email.trim(), pw);
+      if(isNew) {
+        const cred = await createUserWithEmailAndPassword(auth, email.trim(), pw);
+        // Firebase sends this itself — no mail service or API key needed.
+        try { await sendEmailVerification(cred.user); } catch(e) {}
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), pw);
+      }
       onDone && onDone();
     } catch(e) {
       const c = e.code || "";
@@ -2197,6 +2019,19 @@ function AuthPanel({ preset, onDone }) {
           fontFamily:"'Inter',sans-serif",fontSize:9,color:preset.color}}>
         {isNew ? "I already have an account" : "New here? Create an account"}
       </button>
+
+      {!isNew && (
+        <button onClick={async()=>{
+            if(!email.trim().includes("@")){ setErr("Type your email above first."); return; }
+            try { await sendPasswordResetEmail(getAuth(), email.trim());
+                  setErr("Reset link sent — check your inbox and spam folder."); }
+            catch(e){ setErr("Could not send the reset email."); }
+          }}
+          style={{background:"none",border:"none",cursor:"pointer",width:"100%",marginTop:6,
+            fontFamily:"'Inter',sans-serif",fontSize:9,color:"rgba(var(--ink-rgb),0.35)"}}>
+          Forgot password?
+        </button>
+      )}
 
       {err && <div style={{fontFamily:"'Inter',sans-serif",fontSize:9,color:"#DC3B3B",
         marginTop:10,lineHeight:1.5}}>{err}</div>}
@@ -2307,8 +2142,6 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const [fxCount,  setFxCount]  = useState(null);
   const [hideNeg,  setHideNeg]  = useState(false);
   const [locked,   setLocked]   = useState(null);   // subscription message
-  const [showAdmin,setShowAdmin]= useState(false);
-  const [isAdmin,  setIsAdmin]  = useState(false);
   const [codeInput,setCodeInput]= useState("");
 
   const today = new Date().toLocaleDateString("en-CA", {
@@ -2387,25 +2220,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
   const valueCount = tips.filter(t=>typeof t.value==="number"&&t.value>0).length;
   const negCount   = tips.filter(t=>typeof t.value==="number"&&t.value<0).length;
 
-  // Ask the server whether this signed-in account is an admin.
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      const u = getAuth().currentUser;
-      if(!u) { if(live) setIsAdmin(false); return; }
-      try {
-        const r = await fetch(`${API_BASE}/api/admin/me`, {
-          headers: { Authorization: `Bearer ${await u.getIdToken()}` }});
-        const d = await r.json();
-        if(live) setIsAdmin(!!d.is_admin);
-      } catch(e) { if(live) setIsAdmin(false); }
-    })();
-    return () => { live = false; };
-  }, [account.user]);
-
   const riskColor = r => r==="LOW"?"#159A56":r==="MEDIUM"?"#E08A00":"#DC3B3B";
-
-  if(showAdmin) return <AdminPanel preset={preset} onClose={()=>setShowAdmin(false)}/>;
 
   return (
     <div>
@@ -2460,13 +2275,7 @@ function TipsTab({ plan, st, preset, onTrack }) {
         </div>
 
         {/* Admin entry (only visible once an admin key is stored) */}
-        {(isAdmin || getAdminKey()) && (
-          <button onClick={()=>setShowAdmin(true)}
-            style={{width:"100%",minHeight:36,marginTop:10,borderRadius:8,cursor:"pointer",
-              background:"transparent",border:`1px dashed ${preset.color}55`,
-              fontFamily:"'Inter',sans-serif",fontWeight:700,fontSize:9,letterSpacing:1,
-              color:preset.color}}>⚙ ADMIN · UPLOAD / SETTLE TIPS</button>
-        )}
+
 
         {/* Account + subscription */}
         {account.ready && !account.user && (
@@ -2480,7 +2289,8 @@ function TipsTab({ plan, st, preset, onTrack }) {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
             marginTop:10,fontFamily:"'Inter',sans-serif",fontSize:8.5,
             color:"rgba(var(--ink-rgb),0.3)"}}>
-            <span>{account.user.phoneNumber || account.user.email}
+            <span title={account.user.uid}>{account.user.email}
+              <span style={{opacity:.5}}> · ID {String(account.user.uid).slice(0,8)}</span>
               {account.sub?.active && <span style={{color:"#159A56"}}> · active to {String(account.sub.expires).slice(0,10)}</span>}
             </span>
             <button onClick={()=>signOut(getAuth())}
